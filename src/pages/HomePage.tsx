@@ -25,43 +25,46 @@ export default function HomePage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden border-b bg-court-pattern">
-        <div className="container grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
-          <div>
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-bold text-primary shadow-sm">
-              <span className="h-2 w-2 rounded-full bg-ball ring-2 ring-primary/30" aria-hidden="true" />
+      <section className="relative isolate overflow-hidden border-b bg-[#0d2a1f] text-white">
+        {/* Background photo (public/hero.jpg). Decorative, so empty alt; the dark green shows if it's missing. */}
+        <img
+          src="/hero.jpg"
+          alt=""
+          aria-hidden="true"
+          onError={(e) => (e.currentTarget.hidden = true)}
+          className="absolute inset-0 -z-20 h-full w-full object-cover object-[65%_center]"
+        />
+        {/* Darkens the left side so the text stays readable over the photo. */}
+        <div
+          className="absolute inset-0 -z-10 bg-gradient-to-r from-[#07160f]/90 via-[#07160f]/65 to-[#07160f]/10"
+          aria-hidden="true"
+        />
+        <div className="container py-16 sm:py-24 lg:py-32">
+          <div className="max-w-2xl">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold text-white backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-ball" aria-hidden="true" />
               Now booking up to {bookingRules.advanceBookingDays} days ahead
             </p>
-            <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight drop-shadow sm:text-5xl lg:text-6xl">
               {facility.tagline.split(". ")[0]}.{" "}
-              <span className="text-primary">{facility.tagline.split(". ").slice(1).join(". ")}</span>
+              <span className="text-ball">{facility.tagline.split(". ").slice(1).join(". ")}</span>
             </h1>
-            <p className="mt-5 max-w-xl text-lg text-muted-foreground">{facility.intro}</p>
+            <p className="mt-5 max-w-xl text-lg text-white/85">{facility.intro}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="xl" className="shadow-lg shadow-primary/20">
+              <Button asChild size="xl" variant="ball" className="shadow-lg shadow-black/30">
                 <Link to="/book">
                   <CalendarCheck className="!size-5" /> Book a Court
                 </Link>
               </Button>
-              <Button asChild size="xl" variant="outline">
+              <Button asChild size="xl" variant="outline" className="border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white">
                 <Link to="/rates">See rates & hours</Link>
               </Button>
             </div>
-            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-muted-foreground">
-              <li className="flex items-center gap-1.5"><UserX className="h-4 w-4 text-primary" /> No account needed</li>
-              <li className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" /> Book in under 2 minutes</li>
-              <li className="flex items-center gap-1.5"><Check className="h-4 w-4 text-primary" /> From {formatPeso(lowestRate)}/hr</li>
+            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-white/85">
+              <li className="flex items-center gap-1.5"><UserX className="h-4 w-4 text-ball" /> No account needed</li>
+              <li className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-ball" /> Book in under 2 minutes</li>
+              <li className="flex items-center gap-1.5"><Check className="h-4 w-4 text-ball" /> From {formatPeso(lowestRate)}/hr</li>
             </ul>
-          </div>
-          <div className="relative hidden lg:block">
-            <div className="absolute -inset-4 rotate-2 rounded-3xl bg-ball/40" aria-hidden="true" />
-            <img
-              src={courts[0].image}
-              alt={courts[0].imageAlt}
-              className="relative rounded-3xl border-4 border-card shadow-xl"
-              width={640}
-              height={400}
-            />
           </div>
         </div>
       </section>
