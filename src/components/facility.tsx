@@ -63,8 +63,8 @@ export function CourtCard({ court }: { court: Court }) {
   const schedule = summarizeHours(court);
   return (
     <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
-      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-        <img src={court.image} alt={court.imageAlt} className="h-full w-full object-cover" loading="lazy" width={640} height={400} />
+      <div className="relative aspect-video overflow-hidden bg-muted">
+        <img src={court.image} alt={court.imageAlt} className="h-full w-full object-cover" loading="lazy" width={640} height={360} />
         <div className="absolute left-3 top-3">
           <CourtTypeBadge type={court.type} />
         </div>

@@ -28,7 +28,7 @@ export default defineConfig({
     VitePWA({
       // "prompt": never reload by itself mid-booking; the app offers a Reload button instead.
       registerType: "prompt",
-      includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png", "favicon.ico", "courts/*.svg", "gcash-qr.svg"],
+      includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png", "favicon.ico", "courts/*.svg", "courts/*.jpg", "gcash-qr.svg"],
       manifest: {
         name: "Dink District Pickleball - Court Booking",
         short_name: "Dink District",
