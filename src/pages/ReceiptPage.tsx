@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, FileText, ImagePlus, Landmark, Loader2, RefreshCw, Smartphone, Upload, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, FileText, Home, ImagePlus, Landmark, Loader2, RefreshCw, Smartphone, Upload, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { SendViaPhone } from "@/components/messaging";
 import { PaymentInstructions } from "@/components/payment";
 import { StatusBadge } from "@/components/status";
 import { facility } from "@/config/facility";
-import { payment, type PaymentMethod } from "@/config/payment";
+import { payment, paymentMethodLabel, type PaymentMethod } from "@/config/payment";
 import { receiptUpload, services } from "@/config/services";
 import { useBooking, type SentVia } from "@/context/BookingContext";
 import { formatPeso } from "@/lib/pricing";
@@ -21,6 +21,7 @@ import { bookingFromParams, bookingToParams } from "@/lib/bookingUrl";
 import { receiptMessage, type OutgoingMessage } from "@/lib/message";
 import { EXAMPLE_REFERENCE } from "@/lib/reference";
 import { nowStamp, SubmissionError, submitPaymentReceipt, type BookingSummary } from "@/lib/submit";
+import { facilityNow, formatDate, formatTime, formatTimeRange } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import {
   formatPhMobile,
@@ -30,6 +31,16 @@ import {
   parseAmount,
   validateReceiptFile,
 } from "@/lib/validation";
+
+/** A validated receipt, as sent to the service or written into the phone message. */
+interface ReceiptDetails {
+  reference: string;
+  method: PaymentMethod;
+  transactionReference: string;
+  amountPaid: number;
+  booking: BookingSummary | null;
+  mobile: string;
+}
 
 interface FormState {
   reference: string;
@@ -83,7 +94,7 @@ export default function ReceiptPage() {
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<SubmissionError | null>(null);
-  const [done, setDone] = useState<{ reference: string; via: SentVia } | null>(null);
+  const [done, setDone] = useState<(ReceiptDetails & { via: SentVia; sentAt: string }) | null>(null);
   const [honeypot, setHoneypot] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -120,16 +131,17 @@ export default function ReceiptPage() {
 
   const phoneMode = services.deliveryMode === "phone";
   // The receipt message being sent from the customer's phone (phone mode, or as a backup after a service error).
-  const [phoneReceipt, setPhoneReceipt] = useState<{ reference: string; message: OutgoingMessage } | null>(null);
-  const [lastReceipt, setLastReceipt] = useState<{ reference: string; message: OutgoingMessage } | null>(null);
+  const [phoneReceipt, setPhoneReceipt] = useState<{ details: ReceiptDetails; message: OutgoingMessage } | null>(null);
+  const [lastReceipt, setLastReceipt] = useState<{ details: ReceiptDetails; message: OutgoingMessage } | null>(null);
   const phonePanelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (phoneReceipt) phonePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [phoneReceipt]);
 
-  function finish(reference: string, via: SentVia) {
-    markReceiptSent(reference, via);
-    setDone({ reference, via });
+  function finish(details: ReceiptDetails, via: SentVia) {
+    markReceiptSent(details.reference, via);
+    const now = facilityNow();
+    setDone({ ...details, via, sentAt: `${formatDate(now.date, "medium")}, ${formatTime(now.minutes)}` });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -147,7 +159,7 @@ export default function ReceiptPage() {
       return;
     }
     const reference = normalizeReference(form.reference);
-    const receipt = {
+    const receipt: ReceiptDetails = {
       reference,
       method: form.method as PaymentMethod,
       transactionReference: form.transactionReference.trim().toUpperCase(),
@@ -155,16 +167,16 @@ export default function ReceiptPage() {
       booking: known?.reference === reference ? known : null,
       mobile: normalizePhMobile(form.mobile) ?? "",
     };
-    setLastReceipt({ reference, message: receiptMessage(receipt) });
+    setLastReceipt({ details: receipt, message: receiptMessage(receipt) });
     if (phoneMode) {
-      setPhoneReceipt({ reference, message: receiptMessage(receipt) });
+      setPhoneReceipt({ details: receipt, message: receiptMessage(receipt) });
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
       await submitPaymentReceipt({ ...receipt, file: file!, submittedAt: nowStamp() });
-      finish(reference, "service");
+      finish(receipt, "service");
     } catch (err) {
       setError(err instanceof SubmissionError ? err : new SubmissionError("network", "Something went wrong. Please try again."));
     } finally {
@@ -174,38 +186,72 @@ export default function ReceiptPage() {
 
   if (done) {
     const byPhone = done.via === "phone";
-    const viewParams = known ? bookingToParams(known) : null;
+    // "Check confirmation" opens this booking's confirmation page when we know the booking,
+    // otherwise the Check Booking page.
+    const viewParams = done.booking ? bookingToParams(done.booking) : null;
     if (viewParams && params.get("via") === "phone") viewParams.set("via", "phone");
+    const checkLink = viewParams ? `/booking/submitted?${viewParams}` : "/check-booking";
+    const rows: [string, ReactNode][] = [
+      ["Booking ref", <span className="font-mono">{done.reference}</span>],
+      ["Transaction ref", <span className="font-mono">{done.transactionReference}</span>],
+      ["Date", done.sentAt],
+      ["Payment method", paymentMethodLabel[done.method]],
+      ...(done.booking
+        ? ([
+            ["Court", done.booking.court.name],
+            ["Booking", `${formatDate(done.booking.date, "short")}, ${formatTimeRange(done.booking.start, done.booking.duration)}`],
+          ] as [string, ReactNode][])
+        : []),
+    ];
     return (
-      <div className="container max-w-2xl py-10 sm:py-14">
-        <div className="text-center">
-          <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-primary" aria-hidden="true" />
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-            {byPhone ? "Payment details sent" : "Payment details submitted"}
-          </h1>
-          <p className="mt-3 text-muted-foreground">
-            {byPhone ? "You sent your payment details and receipt for " : "We received your payment details and receipt for "}
-            <span className="font-mono font-bold text-foreground">{done.reference}</span>.
-            {byPhone && " The facility will reply to let you know they received it."}
+      <div className="container flex justify-center py-10 sm:py-16">
+        <div className="w-full max-w-sm">
+          <div className="rounded-2xl border bg-card p-6 text-center shadow-lg">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/15" aria-hidden="true">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Check className="h-6 w-6" strokeWidth={3} />
+              </span>
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight">Receipt Sent!</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {byPhone
+                ? "Waiting for the facility to reply and verify your payment."
+                : "Waiting for the facility to verify your payment."}
+            </p>
+            <p className="mt-5 text-xs font-medium text-muted-foreground">Amount paid</p>
+            <p className="text-4xl font-extrabold tabular-nums tracking-tight">{formatPeso(done.amountPaid)}</p>
+
+            <dl className="mt-6 space-y-3 border-t pt-5 text-left text-sm">
+              {rows.map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4">
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="text-right font-semibold">{value}</dd>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd><StatusBadge status="payment_submitted" className="px-2 py-0.5 text-xs [&_svg]:size-3" /></dd>
+              </div>
+            </dl>
+
+            <Button asChild size="lg" className="mt-6 w-full">
+              <Link to="/">
+                <Home /> Back to Home
+              </Link>
+            </Button>
+            <Link
+              to={checkLink}
+              className="mt-4 inline-block text-sm font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
+            >
+              Check confirmation
+            </Link>
+          </div>
+
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Your booking isn't confirmed until staff check the payment in our GCash/bank records. You'll get an SMS or
+            email. If the slot is unavailable, you'll get a full refund. Questions? Call {facility.contact.phone}.
           </p>
-          <div className="mt-4 flex justify-center"><StatusBadge status="payment_submitted" /></div>
         </div>
-        <Alert variant="info" className="mt-8">
-          <AlertTriangle />
-          <AlertTitle>Your booking is not confirmed yet</AlertTitle>
-          <AlertDescription>
-            Staff will check that the payment actually arrived in our GCash or bank account and that the court is still
-            available. You'll receive a confirmation by SMS or email. If the slot is unavailable, your payment will be
-            refunded in full.
-          </AlertDescription>
-        </Alert>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {viewParams && known?.reference === done.reference && (
-            <Button asChild size="lg" variant="outline"><Link to={`/booking/submitted?${viewParams}`}>View booking request</Link></Button>
-          )}
-          <Button asChild size="lg" className={cn(known?.reference !== done.reference && "sm:col-span-2")}><Link to="/">Back to home</Link></Button>
-        </div>
-        <ContactCard reference={done.reference} className="mt-8" />
       </div>
     );
   }
@@ -474,7 +520,7 @@ export default function ReceiptPage() {
                 file={file}
                 sentLabel="I've sent my receipt"
                 title={phoneMode ? "Send your receipt" : "Send it from your phone instead"}
-                onSent={() => finish(phoneReceipt.reference, "phone")}
+                onSent={() => finish(phoneReceipt.details, "phone")}
               />
             </div>
           ) : (
