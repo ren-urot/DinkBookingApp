@@ -16,7 +16,7 @@ const navItems = [
 ];
 
 const secondaryItems = [
-  { to: "/pay", label: "Submit payment receipt", icon: Upload },
+  { to: "/pay", label: "Send payment receipt", icon: Upload },
   { to: "/check-booking", label: "Check booking", icon: Search },
 ];
 
@@ -145,7 +145,7 @@ function Footer() {
           <h2 className="mb-3 text-sm font-bold">Bookings</h2>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li><Link className="hover:text-foreground" to="/book">Book a court</Link></li>
-            <li><Link className="hover:text-foreground" to="/pay">Submit payment receipt</Link></li>
+            <li><Link className="hover:text-foreground" to="/pay">Send payment receipt</Link></li>
             <li><Link className="hover:text-foreground" to="/check-booking">Check booking</Link></li>
             <li><Link className="hover:text-foreground" to="/rates">Rates & hours</Link></li>
           </ul>

@@ -32,26 +32,29 @@ interface BookingContextValue {
   draft: Draft;
   updateDraft: (patch: Partial<Draft>) => void;
   resetDraft: () => void;
-  /** The most recent request the external service acknowledged in this session. */
+  /** The most recent request sent in this session (acknowledged by the service, or sent by the customer's phone). */
   submitted: BookingRequest | null;
   setSubmitted: (b: BookingRequest) => void;
-  /** References whose receipt was acknowledged in this session. */
-  receiptSentFor: string[];
-  markReceiptSent: (reference: string) => void;
+  /** How each receipt was sent this session, keyed by booking reference. */
+  receiptSentFor: Record<string, SentVia>;
+  markReceiptSent: (reference: string, via: SentVia) => void;
 }
+
+/** "service": the form service acknowledged it. "phone": the customer says they sent it from their phone. */
+export type SentVia = "service" | "phone";
 
 const BookingContext = createContext<BookingContextValue | null>(null);
 
 export function BookingProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [submitted, setSubmittedState] = useState<BookingRequest | null>(null);
-  const [receiptSentFor, setReceiptSentFor] = useState<string[]>([]);
+  const [receiptSentFor, setReceiptSentFor] = useState<Record<string, SentVia>>({});
 
   const updateDraft = useCallback((patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch })), []);
   const resetDraft = useCallback(() => setDraft(emptyDraft), []);
   const setSubmitted = useCallback((b: BookingRequest) => setSubmittedState(b), []);
   const markReceiptSent = useCallback(
-    (reference: string) => setReceiptSentFor((list) => (list.includes(reference) ? list : [...list, reference])),
+    (reference: string, via: SentVia) => setReceiptSentFor((sent) => ({ ...sent, [reference]: via })),
     [],
   );
 

@@ -9,14 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Field, fieldAria, handleChoiceKeys, PageHeader, rovingTabIndex } from "@/components/common";
 import { ContactCard } from "@/components/facility";
+import { SendViaPhone } from "@/components/messaging";
 import { PaymentInstructions } from "@/components/payment";
 import { StatusBadge } from "@/components/status";
 import { facility } from "@/config/facility";
 import { payment, type PaymentMethod } from "@/config/payment";
-import { receiptUpload } from "@/config/services";
-import { useBooking } from "@/context/BookingContext";
+import { receiptUpload, services } from "@/config/services";
+import { useBooking, type SentVia } from "@/context/BookingContext";
 import { formatPeso } from "@/lib/pricing";
 import { bookingFromParams, bookingToParams } from "@/lib/bookingUrl";
+import { receiptMessage, type OutgoingMessage } from "@/lib/message";
 import { EXAMPLE_REFERENCE } from "@/lib/reference";
 import { nowStamp, SubmissionError, submitPaymentReceipt, type BookingSummary } from "@/lib/submit";
 import { cn } from "@/lib/utils";
@@ -81,7 +83,7 @@ export default function ReceiptPage() {
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<SubmissionError | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ reference: string; via: SentVia } | null>(null);
   const [honeypot, setHoneypot] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -116,11 +118,28 @@ export default function ReceiptPage() {
     if (f.type.startsWith("image/") && f.type !== "image/heic" && f.type !== "image/heif") setPreview(URL.createObjectURL(f));
   }
 
+  const phoneMode = services.deliveryMode === "phone";
+  // The receipt message being sent from the customer's phone (phone mode, or as a backup after a service error).
+  const [phoneReceipt, setPhoneReceipt] = useState<{ reference: string; message: OutgoingMessage } | null>(null);
+  const [lastReceipt, setLastReceipt] = useState<{ reference: string; message: OutgoingMessage } | null>(null);
+  const phonePanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (phoneReceipt) phonePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [phoneReceipt]);
+
+  function finish(reference: string, via: SentVia) {
+    markReceiptSent(reference, via);
+    setDone({ reference, via });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (submitting || honeypot) return;
     setAttempted(true);
-    const found: Errors = { ...validate(form), file: (await validateReceiptFile(file)) ?? undefined };
+    // In phone mode the screenshot is attached in the customer's chat, so picking it here is optional.
+    const fileError = file || !phoneMode ? await validateReceiptFile(file) : null;
+    const found: Errors = { ...validate(form), file: fileError ?? undefined };
     setErrors(found);
     const first = (Object.keys(found) as (keyof Errors)[]).find((k) => found[k]);
     if (first) {
@@ -128,22 +147,24 @@ export default function ReceiptPage() {
       return;
     }
     const reference = normalizeReference(form.reference);
+    const receipt = {
+      reference,
+      method: form.method as PaymentMethod,
+      transactionReference: form.transactionReference.trim().toUpperCase(),
+      amountPaid: parseAmount(form.amount)!,
+      booking: known?.reference === reference ? known : null,
+      mobile: normalizePhMobile(form.mobile) ?? "",
+    };
+    setLastReceipt({ reference, message: receiptMessage(receipt) });
+    if (phoneMode) {
+      setPhoneReceipt({ reference, message: receiptMessage(receipt) });
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await submitPaymentReceipt({
-        reference,
-        method: form.method as PaymentMethod,
-        transactionReference: form.transactionReference.trim().toUpperCase(),
-        amountPaid: parseAmount(form.amount)!,
-        booking: known?.reference === reference ? known : null,
-        mobile: normalizePhMobile(form.mobile) ?? "",
-        file: file!,
-        submittedAt: nowStamp(),
-      });
-      markReceiptSent(reference);
-      setDone(reference);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      await submitPaymentReceipt({ ...receipt, file: file!, submittedAt: nowStamp() });
+      finish(reference, "service");
     } catch (err) {
       setError(err instanceof SubmissionError ? err : new SubmissionError("network", "Something went wrong. Please try again."));
     } finally {
@@ -152,13 +173,20 @@ export default function ReceiptPage() {
   }
 
   if (done) {
+    const byPhone = done.via === "phone";
+    const viewParams = known ? bookingToParams(known) : null;
+    if (viewParams && params.get("via") === "phone") viewParams.set("via", "phone");
     return (
       <div className="container max-w-2xl py-10 sm:py-14">
         <div className="text-center">
           <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-primary" aria-hidden="true" />
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Payment details submitted</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            {byPhone ? "Payment details sent" : "Payment details submitted"}
+          </h1>
           <p className="mt-3 text-muted-foreground">
-            We received your payment details and receipt for <span className="font-mono font-bold text-foreground">{done}</span>.
+            {byPhone ? "You sent your payment details and receipt for " : "We received your payment details and receipt for "}
+            <span className="font-mono font-bold text-foreground">{done.reference}</span>.
+            {byPhone && " The facility will reply to let you know they received it."}
           </p>
           <div className="mt-4 flex justify-center"><StatusBadge status="payment_submitted" /></div>
         </div>
@@ -172,26 +200,30 @@ export default function ReceiptPage() {
           </AlertDescription>
         </Alert>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {known?.reference === done && (
-            <Button asChild size="lg" variant="outline"><Link to={`/booking/submitted?${bookingToParams(known!)}`}>View booking request</Link></Button>
+          {viewParams && known?.reference === done.reference && (
+            <Button asChild size="lg" variant="outline"><Link to={`/booking/submitted?${viewParams}`}>View booking request</Link></Button>
           )}
-          <Button asChild size="lg" className={cn(known?.reference !== done && "sm:col-span-2")}><Link to="/">Back to home</Link></Button>
+          <Button asChild size="lg" className={cn(known?.reference !== done.reference && "sm:col-span-2")}><Link to="/">Back to home</Link></Button>
         </div>
-        <ContactCard reference={done} className="mt-8" />
+        <ContactCard reference={done.reference} className="mt-8" />
       </div>
     );
   }
 
   const amountNum = parseAmount(form.amount);
   const amountMismatch = known && amountNum != null && normalizeReference(form.reference) === known.reference && amountNum !== known.fee.total;
-  const alreadySent = receiptSentFor.includes(normalizeReference(form.reference));
+  const alreadySent = normalizeReference(form.reference) in receiptSentFor;
 
   return (
     <>
       <PageHeader
         eyebrow="Payment"
-        title="Submit your payment receipt"
-        description="Paid through GCash or bank transfer? Send us the transaction reference and a screenshot so staff can verify it."
+        title={phoneMode ? "Send your payment receipt" : "Submit your payment receipt"}
+        description={
+          phoneMode
+            ? "Paid through GCash or bank transfer? Fill this in and we'll write the message for you to send from your phone, with your receipt screenshot."
+            : "Paid through GCash or bank transfer? Send us the transaction reference and a screenshot so staff can verify it."
+        }
       />
       <div className="container grid gap-8 py-8 lg:grid-cols-[1fr_380px]">
         <form ref={formRef} onSubmit={submit} noValidate className="space-y-6" aria-label="Payment receipt">
@@ -316,7 +348,12 @@ export default function ReceiptPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="file" className="flex items-baseline gap-1.5">
-                  Receipt screenshot or photo <span className="text-destructive" aria-hidden="true">*</span>
+                  Receipt screenshot or photo
+                  {phoneMode ? (
+                    <span className="text-xs font-medium text-muted-foreground">(optional here - you can attach it in your chat)</span>
+                  ) : (
+                    <span className="text-destructive" aria-hidden="true">*</span>
+                  )}
                 </Label>
                 <input
                   ref={fileInput}
@@ -372,7 +409,10 @@ export default function ReceiptPage() {
                   <p id="file-error" className="text-sm font-medium text-destructive">{errors.file}</p>
                 ) : (
                   <p id="file-hint" className="text-xs text-muted-foreground">
-                    Make sure the amount, date, reference number and recipient name are visible. Sent securely to our staff - not stored on this device.
+                    Make sure the amount, date, reference number and recipient name are visible.{" "}
+                    {phoneMode
+                      ? "On most phones it's attached to your message automatically. Nothing is uploaded to this website."
+                      : "Sent securely to our staff - not stored on this device."}
                   </p>
                 )}
               </div>
@@ -413,34 +453,50 @@ export default function ReceiptPage() {
               <AlertTitle>{error.kind === "timeout" ? "We didn't get a response in time" : "Your receipt was not submitted"}</AlertTitle>
               <AlertDescription className="space-y-2">
                 <p>{error.message}</p>
-                <p>
-                  Your form is still filled in, so you can try again. If it keeps failing, send your receipt and booking
-                  reference to <a className="font-semibold underline" href={`mailto:${facility.contact.email}`}>{facility.contact.email}</a>.
-                </p>
+                <p>Your form is still filled in, so you can try again - or send it from your phone instead.</p>
+                {lastReceipt && !phoneReceipt && (
+                  <Button type="button" variant="outline" className="bg-card" onClick={() => setPhoneReceipt(lastReceipt)}>
+                    <Smartphone /> Send from my phone instead
+                  </Button>
+                )}
               </AlertDescription>
             </Alert>
           )}
 
           <p className="text-xs text-muted-foreground">
-            An uploaded receipt is not proof of payment. Staff verify every transfer against our GCash/bank records before confirming.
+            A receipt is not proof of payment. Staff verify every transfer against our GCash/bank records before confirming.
           </p>
 
-          <Button type="submit" size="xl" className="w-full sm:w-auto" disabled={submitting} aria-busy={submitting}>
-            {submitting ? (
-              <><Loader2 className="animate-spin" /> Uploading receipt…</>
-            ) : error ? (
-              <><RefreshCw /> Try again</>
-            ) : (
-              <><Upload /> Submit payment receipt</>
-            )}
-          </Button>
+          {phoneReceipt ? (
+            <div ref={phonePanelRef} className="scroll-mt-24">
+              <SendViaPhone
+                message={phoneReceipt.message}
+                file={file}
+                sentLabel="I've sent my receipt"
+                title={phoneMode ? "Send your receipt" : "Send it from your phone instead"}
+                onSent={() => finish(phoneReceipt.reference, "phone")}
+              />
+            </div>
+          ) : (
+            <Button type="submit" size="xl" className="w-full sm:w-auto" disabled={submitting} aria-busy={submitting}>
+              {submitting ? (
+                <><Loader2 className="animate-spin" /> Uploading receipt…</>
+              ) : error ? (
+                <><RefreshCw /> Try again</>
+              ) : phoneMode ? (
+                <><Smartphone /> Continue to send receipt</>
+              ) : (
+                <><Upload /> Submit payment receipt</>
+              )}
+            </Button>
+          )}
         </form>
 
         <aside className="space-y-6">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Haven't paid yet?</CardTitle>
-              <CardDescription>Use one of these accounts, then come back to upload your receipt.</CardDescription>
+              <CardDescription>Use one of these accounts, then come back to send your receipt.</CardDescription>
             </CardHeader>
             <CardContent>
               <PaymentInstructions

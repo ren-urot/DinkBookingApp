@@ -25,13 +25,14 @@ export const facility = {
   locale: "en-PH",
 
   contact: {
-    phone: "+63 917 123 4567",
-    phoneHref: "+639171234567",
+    phone: "+63 905 211 3400",
+    phoneHref: "+639052113400",
     /** Number that accepts SMS / Viber messages. */
-    sms: "+639171234567",
-    email: "bookings@dinkdistrict.ph",
-    messengerUrl: "https://m.me/dinkdistrictpickleball",
-    facebookUrl: "https://facebook.com/dinkdistrictpickleball",
+    sms: "+639052113400",
+    email: "ruprintdepot@gmail.com",
+    /** m.me opens a Messenger chat with the same profile as facebookUrl. */
+    messengerUrl: "https://m.me/ren.urot.5",
+    facebookUrl: "https://web.facebook.com/ren.urot.5",
     /** Hours when staff answer messages and verify payments. */
     responseHours: "8:00 AM - 9:00 PM daily",
   },
@@ -56,7 +57,7 @@ export const facility = {
   /** Dates the whole facility is closed ("YYYY-MM-DD"). */
   closedDates: ["2026-12-25", "2027-01-01"] as string[],
 
-  privacyContactEmail: "privacy@dinkdistrict.ph",
+  privacyContactEmail: "ruprintdepot@gmail.com",
 
   /** 2-4 capital letters that start every booking reference, e.g. DD-261020-7KQ3P. */
   referencePrefix: "DD",

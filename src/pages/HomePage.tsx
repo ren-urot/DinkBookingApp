@@ -143,10 +143,10 @@ export default function HomePage() {
             id="payment"
             eyebrow="Payment"
             title="Pay with GCash or bank transfer"
-            description={`After you send a booking request, pay the total within ${bookingRules.paymentWindowHours} hours and upload your receipt. Staff verify every payment against our GCash and bank records before confirming.`}
+            description={`After you send a booking request, pay the total within ${bookingRules.paymentWindowHours} hours and send your receipt. Staff verify every payment against our GCash and bank records before confirming.`}
           />
           <Button asChild variant="outline">
-            <Link to="/pay">Already paid? Submit your receipt <ArrowRight /></Link>
+            <Link to="/pay">Already paid? Send your receipt <ArrowRight /></Link>
           </Button>
         </div>
         <PaymentInstructions />

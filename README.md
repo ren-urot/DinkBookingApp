@@ -1,6 +1,11 @@
 # Pickleball Court Booking
 
-A mobile-first website where customers reserve a pickleball court without an account, pay by GCash or bank transfer, and upload their receipt. There is **no custom database and no login**: booking requests and receipts are sent to an external form service, and staff verify payments and confirm bookings by hand.
+A mobile-first website where customers reserve a pickleball court without an account, pay by GCash or bank transfer, and send their receipt. There is **no server, no database and no login**: it's a static site, and staff verify payments and confirm bookings by hand.
+
+Booking requests and receipts reach the facility in one of two ways:
+
+- **Phone mode (default, zero setup):** the site writes the message and the customer sends it from their own phone by SMS, Viber, Messenger or email. On phones, the share menu attaches the receipt screenshot automatically. The site can't see whether a message was sent, so it says "Request Sent" (not "received") and tells the customer the facility will reply.
+- **Form service (optional upgrade):** set up Formspree, Netlify Forms or a webhook (below) and the site switches automatically. Staff then get emails and a submissions list, and the site confirms each request was received. If the service ever fails, customers are offered phone mode as a backup.
 
 The product requirements are in [docs/PRD.md](docs/PRD.md). The day-to-day staff process is in [docs/STAFF.md](docs/STAFF.md).
 
@@ -10,11 +15,11 @@ Built with React 18, Vite 5, TypeScript, Tailwind CSS, shadcn/ui-style component
 
 ```bash
 npm install
-cp .env.example .env.local   # set VITE_SUBMISSION_PROVIDER=demo to try it locally
+cp .env.example .env.local   # empty provider = phone mode; "demo" simulates a form service
 npm run dev                  # http://localhost:5173
 ```
 
-In `demo` mode a yellow banner shows at the top and **nothing is sent anywhere**. Demo mode only works in development; a production build with `demo` refuses all submissions.
+In `demo` mode a yellow banner shows at the top and **nothing is sent anywhere**. Demo mode only works in development; a production build treats it as empty (phone mode).
 
 | Command | What it does |
 |---|---|
@@ -26,13 +31,15 @@ In `demo` mode a yellow banner shows at the top and **nothing is sent anywhere**
 ## Before going live (checklist)
 
 1. **Real payment details.** In [src/config/payment.ts](src/config/payment.ts), replace the GCash name/number and bank details, replace `public/gcash-qr.svg` with the official GCash QR, then set `isSample: false`. While `isSample` is `true`, customers see a red "do not send money" warning and the build prints a warning.
-2. **Facility details.** In [src/config/facility.ts](src/config/facility.ts): name, contact numbers, email, Messenger link, address, map link, opening hours, closed dates, privacy contact and booking reference prefix. Also update the `<title>` in `index.html` and the PWA `name`/`short_name` in `vite.config.ts`.
+2. **Facility details.** In [src/config/facility.ts](src/config/facility.ts): name, contact numbers (`sms` is where phone-mode SMS go), email, Messenger link, address, map link, opening hours, closed dates, privacy contact and booking reference prefix. Also update the `<title>` in `index.html` and the PWA `name`/`short_name` in `vite.config.ts`.
 3. **Courts and rates.** [src/config/courts.ts](src/config/courts.ts): courts, photos (put them in `public/courts/`), hourly and peak rates, peak windows, add-ons.
 4. **Policies.** [src/config/policies.ts](src/config/policies.ts) and the privacy notice in [src/pages/PrivacyPage.tsx](src/pages/PrivacyPage.tsx).
-5. **Booking service.** Choose a provider (below), set the environment variables on your host, deploy, then do one real booking **and** one receipt upload with a file. Check that both arrive, that staff get an email, and that the receipt file opens.
-6. **Access and retention.** In the service's settings, limit who can see submissions, turn on 2-factor login for staff accounts, and set a retention/deletion schedule (PRD section 8).
+5. **Test delivery.** Phone mode: from a real phone, send one booking and one receipt through each channel (SMS, Viber, Messenger, email) and check they arrive at the facility's number, Viber, Facebook Page inbox and email. Form service: do one real booking **and** one receipt upload with a file, and check both arrive and the receipt opens.
+6. **Access and retention.** Keep the facility phone, Viber, Page inbox and email (or the form service) limited to authorised staff with 2-factor login, and delete old booking messages on a schedule (PRD section 8).
 
-## Choosing the booking service
+## Optional: choosing a form service
+
+Phone mode needs nothing here. A form service adds email notifications, a submissions list for staff, and confirmed receipt of each request.
 
 All settings are `VITE_*` environment variables (see [.env.example](.env.example)). **They are public**: never put a secret API key in them. If a service needs a secret, put it behind a serverless function and point the endpoint at that function.
 
@@ -64,8 +71,8 @@ The site is installable as a PWA. When a new version is deployed, visitors see a
 
 ## How it behaves (privacy and safety)
 
-- **No false confirmations.** The success page appears only after the service explicitly acknowledges the request. Timeouts, offline mode, errors and misconfiguration all show a clear error and the front-desk contact. A retry reuses the same booking reference, so staff can spot duplicates.
-- **Statuses are honest.** The site only ever shows "Awaiting Payment" (request acknowledged) or "Payment Submitted" (receipt acknowledged). "Under Verification", "Confirmed", "Unavailable" and "Cancelled" come from staff, or from the optional lookup service.
+- **No false confirmations.** With a form service, the success page appears only after the service explicitly acknowledges the request; timeouts, offline mode and errors show a clear error plus the phone-mode backup, and a retry reuses the same booking reference so staff can spot duplicates. In phone mode the customer confirms they pressed Send, and the page says "Request Sent" and that the facility will reply.
+- **Statuses are honest.** The site only ever shows "Request Sent" (phone mode, customer says they sent it), "Awaiting Payment" (form service acknowledged the request) or "Payment Submitted". "Under Verification", "Confirmed", "Unavailable" and "Cancelled" come from staff, or from the optional lookup service.
 - **Nothing personal is stored on the device.** No localStorage or cookies. The confirmation page URL carries only the reference, court, date, time and duration (no name, phone or email), so it survives a reload or a closed tab.
 - **Receipt checks.** JPG/PNG/WEBP/HEIC/PDF up to 5 MB, verified by file contents, not just the extension. The service must enforce its own limits too. HEIC photos (iPhone) may need converting before Windows PCs can open them.
 - **Spam.** Both forms include a hidden honeypot field; use the provider's spam filtering as well.
@@ -83,5 +90,6 @@ public/         court images, GCash QR, PWA icons, __forms.html (Netlify)
 ## Known limitations (by design, see PRD section 10)
 
 - The website cannot guarantee real-time availability; staff must check conflicts before confirming.
+- In phone mode the website cannot know whether a message was really sent or delivered. Staff should reply to every booking message so customers know it arrived.
 - Payment verification, confirmation, cancellation and refunds are manual.
 - A second receipt with the same booking reference **and** transaction number in the same browser session is treated as a duplicate and not re-sent.

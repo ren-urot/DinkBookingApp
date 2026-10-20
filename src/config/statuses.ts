@@ -5,8 +5,11 @@
  * lookup service. All other changes come from staff.
  */
 
+import { services } from "./services";
+
 export type BookingStatus =
   | "request_submitted"
+  | "request_sent"
   | "awaiting_payment"
   | "payment_submitted"
   | "under_verification"
@@ -24,6 +27,13 @@ export const statusInfo: Record<BookingStatus, StatusInfo> = {
   request_submitted: {
     label: "Request Submitted",
     description: "Our booking service received your request.",
+    tone: "neutral",
+  },
+  // Phone mode only: the website can't see the customer's messages, so it never
+  // claims the facility "received" anything - only that the customer sent it.
+  request_sent: {
+    label: "Request Sent",
+    description: "You sent your booking request from your phone. The facility will reply to acknowledge it.",
     tone: "neutral",
   },
   awaiting_payment: {
@@ -58,14 +68,33 @@ export const statusInfo: Record<BookingStatus, StatusInfo> = {
   },
 };
 
+const phoneMode = services.deliveryMode === "phone";
+
 /** The normal, happy-path order shown in progress timelines. */
 export const statusFlow: BookingStatus[] = [
-  "request_submitted",
+  phoneMode ? "request_sent" : "request_submitted",
   "awaiting_payment",
   "payment_submitted",
   "under_verification",
   "confirmed",
 ];
+
+/**
+ * Steps only staff can move a booking to (the website never sets these itself).
+ * For requests sent from the customer's phone, "awaiting_payment" is staff-driven too,
+ * since only the facility's reply proves the request arrived (see StatusTimeline).
+ */
+export const staffUpdatedStatuses = new Set<BookingStatus>([
+  "under_verification",
+  "confirmed",
+  "unavailable",
+  "cancelled",
+]);
+
+/** Statuses that can occur with the current delivery mode, for the glossary. */
+export const glossaryStatuses = (Object.keys(statusInfo) as BookingStatus[]).filter((s) =>
+  phoneMode ? s !== "request_submitted" : s !== "request_sent",
+);
 
 export function isBookingStatus(v: unknown): v is BookingStatus {
   return typeof v === "string" && v in statusInfo;

@@ -195,7 +195,7 @@ const steps = [
   { icon: MousePointerClick, title: "Pick a court & time", text: "Choose your court, date, start time and how long you'll play." },
   { icon: Send, title: "Send your request", text: "Enter your name and mobile number - no account needed. You'll get a booking reference." },
   { icon: CreditCard, title: "Pay via GCash or bank", text: `Pay the total within ${bookingRules.paymentWindowHours} hours using the details we show you.` },
-  { icon: Upload, title: "Upload your receipt", text: "Submit your transaction reference and a screenshot of your receipt." },
+  { icon: Upload, title: "Send your receipt", text: "Send your transaction reference and a screenshot of your receipt." },
   { icon: ShieldCheck, title: "We verify & confirm", text: "Staff check the payment and court schedule, then confirm your booking by SMS or email." },
 ];
 
@@ -220,7 +220,8 @@ export function HowItWorks() {
 
 export function ContactCard({ reference, className }: { reference?: string; className?: string }) {
   const c = facility.contact;
-  const smsBody = reference ? `?body=${encodeURIComponent(`Hi! Booking reference ${reference}: `)}` : "";
+  // "?&body=" is understood by both Android and iOS.
+  const smsBody = reference ? `?&body=${encodeURIComponent(`Hi! Booking reference ${reference}: `)}` : "";
   const mailSubject = reference ? `?subject=${encodeURIComponent(`Booking ${reference}`)}` : "";
   const items = [
     { icon: Phone, label: "Call", value: c.phone, href: `tel:${c.phoneHref}` },

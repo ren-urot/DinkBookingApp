@@ -35,7 +35,7 @@ export const payment = {
   notes: [
     "Pay the exact total shown in your booking.",
     "Add your booking reference to the transfer notes or message if your app allows it.",
-    "Keep a screenshot of the successful transfer - you will upload it next.",
+    "Keep a screenshot of the successful transfer - you will send it next.",
   ],
 } as const;
 

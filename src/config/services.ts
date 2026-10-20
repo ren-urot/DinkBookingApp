@@ -48,6 +48,14 @@ export const services = {
   requestTimeoutMs: 20_000,
   receiptTimeoutMs: 60_000,
   isDemo: provider === "demo",
+  /**
+   * How requests and receipts reach the facility:
+   * - "phone": no service configured. The customer's own SMS/Viber/Messenger/
+   *   email app sends a pre-written message. Zero setup, nothing to host.
+   * - "service": a form service (Formspree/Netlify/webhook) receives them and
+   *   acknowledges receipt. Switches on automatically once configured.
+   */
+  deliveryMode: (provider ? "service" : "phone") as "service" | "phone",
 } as const;
 
 export const receiptUpload = {

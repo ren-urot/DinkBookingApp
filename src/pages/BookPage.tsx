@@ -13,6 +13,7 @@ import {
   Pencil,
   RefreshCw,
   Send,
+  Smartphone,
   Sun,
   Sunrise,
   Users,
@@ -27,11 +28,13 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, fieldAria, handleChoiceKeys, rovingTabIndex, SummaryRow } from "@/components/common";
 import { AvailabilityNotice, CourtTypeBadge } from "@/components/facility";
+import { SendViaPhone } from "@/components/messaging";
 import { courts, getCourt, type Court } from "@/config/courts";
 import { bookingRules, facility } from "@/config/facility";
 import { services } from "@/config/services";
-import { useBooking, type Draft } from "@/context/BookingContext";
+import { useBooking, type Draft, type SentVia } from "@/context/BookingContext";
 import { bookingToParams } from "@/lib/bookingUrl";
+import { bookingMessage } from "@/lib/message";
 import { fetchAvailability } from "@/lib/external";
 import { calculateFee, formatPeso, type FeeBreakdown } from "@/lib/pricing";
 import { generateBookingReference } from "@/lib/reference";
@@ -175,10 +178,13 @@ export default function BookPage() {
               fee={fee}
               booked={availability.booked}
               onEdit={goTo}
-              onSubmitted={(booking) => {
+              onSubmitted={(booking, via) => {
                 setSubmitted(booking);
                 resetDraft();
-                navigate(`/booking/submitted?${bookingToParams(booking)}`, { replace: true });
+                const params = bookingToParams(booking);
+                // Tells the confirmation page not to claim the service received it.
+                if (via === "phone") params.set("via", "phone");
+                navigate(`/booking/submitted?${params}`, { replace: true });
               }}
             />
           )}
@@ -804,7 +810,7 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
   fee: FeeBreakdown;
   booked: BookedRange[];
   onEdit: (s: Step) => void;
-  onSubmitted: (b: BookingRequest) => void;
+  onSubmitted: (b: BookingRequest, via: SentVia) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<SubmissionError | null>(null);
@@ -821,20 +827,28 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
     referenceRef.current = { key: requestKey, ref: generateBookingReference() };
   }
 
-  async function submit() {
-    if (submitting || !draft.date || draft.start == null || !draft.duration) return;
-    if (honeypot) return; // bot
+  // The request being sent from the customer's phone (phone mode, or as a backup after a service error).
+  const [phoneBooking, setPhoneBooking] = useState<BookingRequest | null>(null);
+  const [lastBooking, setLastBooking] = useState<BookingRequest | null>(null);
+  const phoneMode = services.deliveryMode === "phone";
+  const phonePanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (phoneBooking) phonePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [phoneBooking]);
+
+  function buildBooking(): BookingRequest | null {
+    if (!draft.date || draft.start == null || !draft.duration) return null;
     if (!detailsOk) {
       onEdit(2);
-      return;
+      return null;
     }
     if (!isSelectionValid(court, draft.date, draft.start, draft.duration, booked)) {
       toast.error("That time can no longer be requested. Please pick another slot.");
       onEdit(1);
-      return;
+      return null;
     }
     const mobile = normalizePhMobile(d.mobile)!;
-    const booking: BookingRequest = {
+    return {
       reference: referenceRef.current!.ref,
       court,
       date: draft.date,
@@ -848,11 +862,22 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
       specialRequests: d.specialRequests.trim(),
       submittedAt: nowStamp(),
     };
+  }
+
+  async function submit() {
+    if (submitting || honeypot) return; // honeypot filled = bot
+    const booking = buildBooking();
+    if (!booking) return;
+    setLastBooking(booking);
+    if (phoneMode) {
+      setPhoneBooking(booking);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       await submitBookingRequest(booking);
-      onSubmitted(booking);
+      onSubmitted(booking, "service");
     } catch (err) {
       setError(err instanceof SubmissionError ? err : new SubmissionError("network", "Something went wrong. Please try again."));
       setSubmitting(false);
@@ -863,7 +888,7 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold">Review your booking request</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Check everything before you submit.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Check everything before you {phoneMode ? "send it" : "submit"}.</p>
       </div>
 
       <Card>
@@ -915,9 +940,11 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
         <AlertTriangle />
         <AlertTitle>This is a booking request, not a confirmed reservation</AlertTitle>
         <AlertDescription>
-          After you submit, you'll get a booking reference and payment instructions. Pay within{" "}
-          {bookingRules.paymentWindowHours} hours and upload your receipt. Your court is reserved only after staff verify
-          your payment and confirm the slot is free.
+          {phoneMode
+            ? "Next, you'll send this request from your phone by SMS, Viber, Messenger or email - we'll write the message for you. "
+            : "After you submit, you'll get a booking reference and payment instructions. "}
+          Pay within {bookingRules.paymentWindowHours} hours and send your receipt. Your court is reserved only after staff
+          verify your payment and confirm the slot is free.
         </AlertDescription>
       </Alert>
 
@@ -944,31 +971,52 @@ function ReviewStep({ court, draft, fee, booked, onEdit, onSubmitted }: {
               </p>
             )}
             <p>
-              Still not working? Call or message us at{" "}
+              Still not working? Send it from your phone instead, or call us at{" "}
               <a className="font-semibold underline" href={`tel:${facility.contact.phoneHref}`}>{facility.contact.phone}</a>.
             </p>
+            {lastBooking && !phoneBooking && (
+              <Button type="button" variant="outline" className="mt-1 bg-card" onClick={() => setPhoneBooking(lastBooking)}>
+                <Smartphone /> Send from my phone instead
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
       )}
 
-      <div className="hidden flex-col-reverse gap-3 sm:flex sm:flex-row sm:justify-between">
-        <Button type="button" variant="outline" size="lg" onClick={() => onEdit(2)} disabled={submitting}>
-          <ArrowLeft /> Back
-        </Button>
-        <SubmitButton submitting={submitting} retry={!!error} onClick={submit} total={fee.total} />
-      </div>
+      {phoneBooking && (
+        <div ref={phonePanelRef} className="scroll-mt-24">
+          <SendViaPhone
+            message={bookingMessage(phoneBooking)}
+            sentLabel="I've sent my booking request"
+            title={phoneMode ? "Send your booking request" : "Send it from your phone instead"}
+            onSent={() => onSubmitted(phoneBooking, "phone")}
+          />
+        </div>
+      )}
 
-      {/* Mobile: sticky submit */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 px-4 pt-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur pb-safe sm:hidden">
-        <SubmitButton submitting={submitting} retry={!!error} onClick={submit} total={fee.total} className="w-full" />
-      </div>
+      {!phoneBooking && (
+        <>
+          <div className="hidden flex-col-reverse gap-3 sm:flex sm:flex-row sm:justify-between">
+            <Button type="button" variant="outline" size="lg" onClick={() => onEdit(2)} disabled={submitting}>
+              <ArrowLeft /> Back
+            </Button>
+            <SubmitButton submitting={submitting} retry={!!error} phoneMode={phoneMode} onClick={submit} total={fee.total} />
+          </div>
+
+          {/* Mobile: sticky submit */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 px-4 pt-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur pb-safe sm:hidden">
+            <SubmitButton submitting={submitting} retry={!!error} phoneMode={phoneMode} onClick={submit} total={fee.total} className="w-full" />
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function SubmitButton({ submitting, retry, onClick, total, className }: {
+function SubmitButton({ submitting, retry, phoneMode, onClick, total, className }: {
   submitting: boolean;
   retry: boolean;
+  phoneMode: boolean;
   onClick: () => void;
   total: number;
   className?: string;
@@ -982,6 +1030,10 @@ function SubmitButton({ submitting, retry, onClick, total, className }: {
       ) : retry ? (
         <>
           <RefreshCw /> Try again
+        </>
+      ) : phoneMode ? (
+        <>
+          <Smartphone /> Continue to send request · {formatPeso(total)}
         </>
       ) : (
         <>

@@ -1,10 +1,12 @@
 import { Ban, CheckCircle2, Circle, CircleDot, Clock, Search, Send, Upload, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { statusFlow, statusInfo, type BookingStatus } from "@/config/statuses";
+import { glossaryStatuses, staffUpdatedStatuses, statusFlow, statusInfo, type BookingStatus } from "@/config/statuses";
+import { services } from "@/config/services";
 import { cn } from "@/lib/utils";
 
 const icons: Record<BookingStatus, typeof Circle> = {
   request_submitted: Send,
+  request_sent: Send,
   awaiting_payment: Clock,
   payment_submitted: Upload,
   under_verification: Search,
@@ -36,18 +38,24 @@ export function StatusBadge({ status, className }: { status: BookingStatus; clas
  * explicitly labelled as pending staff action so the page never implies
  * a status change that hasn't happened.
  */
-export function StatusTimeline({ current }: { current: BookingStatus }) {
+export function StatusTimeline({ current, sentByPhone = services.deliveryMode === "phone" }: {
+  current: BookingStatus;
+  /** The request went out from the customer's phone, so nothing confirms it arrived until staff reply. */
+  sentByPhone?: boolean;
+}) {
+  const flow: BookingStatus[] = [sentByPhone ? "request_sent" : "request_submitted", ...statusFlow.slice(1)];
+  const staffUpdated = (s: BookingStatus) => staffUpdatedStatuses.has(s) || (sentByPhone && s === "awaiting_payment");
   const terminal = current === "unavailable" || current === "cancelled";
-  const currentIndex = terminal ? -1 : statusFlow.indexOf(current);
+  const currentIndex = terminal ? -1 : flow.indexOf(current);
   return (
     <ol className="space-y-0" aria-label="Booking progress">
-      {statusFlow.map((s, i) => {
+      {flow.map((s, i) => {
         const done = i < currentIndex;
         const active = i === currentIndex;
         const Icon = done ? CheckCircle2 : active ? CircleDot : Circle;
         return (
           <li key={s} className="relative flex gap-3 pb-5 last:pb-0" aria-current={active ? "step" : undefined}>
-            {i < statusFlow.length - 1 && (
+            {i < flow.length - 1 && (
               <span
                 className={cn("absolute left-[11px] top-7 h-[calc(100%-1.75rem)] w-0.5", done ? "bg-primary" : "bg-border")}
                 aria-hidden="true"
@@ -67,7 +75,7 @@ export function StatusTimeline({ current }: { current: BookingStatus }) {
                 {done && <span className="sr-only"> (completed)</span>}
               </p>
               <p className="text-sm text-muted-foreground">{statusInfo[s].description}</p>
-              {i > currentIndex && i >= statusFlow.indexOf("under_verification") && !terminal && (
+              {i > currentIndex && staffUpdated(s) && !terminal && (
                 <p className="mt-0.5 text-xs font-medium text-muted-foreground/80">Updated by staff</p>
               )}
             </div>
@@ -90,7 +98,7 @@ export function StatusTimeline({ current }: { current: BookingStatus }) {
 export function StatusGlossary() {
   return (
     <dl className="grid gap-3 sm:grid-cols-2">
-      {(Object.keys(statusInfo) as BookingStatus[]).map((s) => (
+      {glossaryStatuses.map((s) => (
         <div key={s} className="rounded-xl border bg-card p-3">
           <dt><StatusBadge status={s} /></dt>
           <dd className="mt-2 text-sm text-muted-foreground">{statusInfo[s].description}</dd>

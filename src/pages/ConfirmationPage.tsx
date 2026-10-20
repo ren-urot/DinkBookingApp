@@ -8,7 +8,8 @@ import { CopyButton, SummaryRow } from "@/components/common";
 import { ContactCard } from "@/components/facility";
 import { PaymentInstructions } from "@/components/payment";
 import { StatusBadge, StatusTimeline } from "@/components/status";
-import { bookingRules } from "@/config/facility";
+import { bookingRules, facility } from "@/config/facility";
+import { services } from "@/config/services";
 import type { PaymentMethod } from "@/config/payment";
 import { useBooking } from "@/context/BookingContext";
 import { bookingFromParams, bookingToParams } from "@/lib/bookingUrl";
@@ -34,10 +35,16 @@ export default function ConfirmationPage() {
     submitted && (!fromUrl || fromUrl.reference === submitted.reference) ? submitted : fromUrl;
   if (!booking) return <Navigate to="/check-booking" replace />;
 
-  const receiptSent = receiptSentFor.includes(booking.reference);
-  const status = receiptSent ? "payment_submitted" : "awaiting_payment";
+  const receiptVia = receiptSentFor[booking.reference];
+  const receiptSent = Boolean(receiptVia);
+  const phoneMode = services.deliveryMode === "phone";
+  // Sent from the customer's phone (phone mode, or the backup after a service error): the site
+  // only knows the customer says they sent it, not that it arrived.
+  const sentByPhone = phoneMode || params.get("via") === "phone";
+  const status = receiptSent ? "payment_submitted" : sentByPhone ? "request_sent" : "awaiting_payment";
   const payParams = bookingToParams(booking);
   payParams.set("method", method);
+  if (sentByPhone && !phoneMode) payParams.set("via", "phone");
   const now = facilityNow();
   const startsSoon = booking.date === now.date && booking.start - now.minutes < bookingRules.paymentWindowHours * 60;
 
@@ -46,12 +53,18 @@ export default function ConfirmationPage() {
       <div className="mb-8 text-center">
         <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-primary" aria-hidden="true" />
         <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-tight outline-none sm:text-3xl">
-          Booking request submitted
+          {sentByPhone ? "Booking request sent" : "Booking request submitted"}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
           Your booking request has been submitted. Please complete your payment and wait for the facility to verify your
           payment and confirm your reservation.
         </p>
+        {sentByPhone && (
+          <p className="mx-auto mt-3 max-w-xl rounded-lg bg-secondary p-3 text-sm">
+            The facility will reply to your message to let you know they received it. No reply within 30 minutes during
+            staff hours ({facility.contact.responseHours})? Call {facility.contact.phone}.
+          </p>
+        )}
       </div>
 
       <Card className="mb-6 border-primary/40">
@@ -92,7 +105,7 @@ export default function ConfirmationPage() {
             <CardDescription>We'll contact you by SMS{booking.email ? " or email" : ""} when staff update your booking.</CardDescription>
           </CardHeader>
           <CardContent>
-            <StatusTimeline current={status} />
+            <StatusTimeline current={status} sentByPhone={sentByPhone} />
           </CardContent>
         </Card>
       </div>
@@ -100,7 +113,7 @@ export default function ConfirmationPage() {
       {receiptSent ? (
         <Alert variant="success" className="mt-6">
           <CheckCircle2 />
-          <AlertTitle>Payment details received</AlertTitle>
+          <AlertTitle>{receiptVia === "phone" ? "Payment details sent" : "Payment details received"}</AlertTitle>
           <AlertDescription>
             Staff will verify your payment against our records and confirm the court is available. Your booking is not
             confirmed until you hear from us.
@@ -113,7 +126,7 @@ export default function ConfirmationPage() {
             {startsSoon ? (
               <p className="mt-2 flex gap-1.5 rounded-lg bg-warning p-3 text-sm font-semibold text-warning-foreground">
                 <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                Your slot starts soon - please pay right away and upload your receipt so staff have time to verify it.
+                Your slot starts soon - please pay right away and send your receipt so staff have time to verify it.
               </p>
             ) : (
               <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -127,12 +140,12 @@ export default function ConfirmationPage() {
           <Card className="mt-6 bg-secondary/60">
             <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-bold">Step 3: Paid already? Upload your receipt</p>
+                <p className="font-bold">Step 3: Paid already? {phoneMode ? "Send your receipt" : "Upload your receipt"}</p>
                 <p className="text-sm text-muted-foreground">Have your transaction reference number and screenshot ready.</p>
               </div>
               <Button asChild size="lg">
                 <Link to={`/pay?${payParams}`}>
-                  <Upload /> Submit payment receipt
+                  <Upload /> {phoneMode ? "Send payment receipt" : "Submit payment receipt"}
                 </Link>
               </Button>
             </CardContent>

@@ -7,3 +7,7 @@ dev-dist
 *.log
 .playwright-mcp
 *.tsbuildinfo
+
+.vercel
+.env*
+!.env.example

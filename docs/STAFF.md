@@ -1,14 +1,23 @@
 # Staff guide: verifying payments and confirming bookings
 
-The website only collects **requests** and **receipts**. Nothing is reserved until a staff member confirms it. Work from the booking service (Formspree, Netlify or your sheet), your schedule, and the real GCash/bank records.
+The website only collects **requests** and **receipts**. Nothing is reserved until a staff member confirms it. Work from your messages (or the booking service, if one is set up), your schedule, and the real GCash/bank records.
+
+## Where bookings arrive
+
+- **Phone mode (default):** customers send messages from their own phone. Check **all four inboxes** during staff hours: the facility's **SMS** number, **Viber**, the **Facebook Page inbox (Messenger)** and the **bookings email**.
+- **Form service (if set up):** emails from Formspree/Netlify plus the service's submissions list.
+
+**Reply to every booking message right away**, even just "Received, checking availability". In phone mode the website tells customers to expect your reply. It's their only proof the message arrived.
 
 ## What you receive
 
-**Booking request** (email subject starts with "New booking request"):
-reference (e.g. `DD-261020-7KQ3P`), court, date, start and end time, duration, estimated total and fee breakdown, customer name, mobile, and optionally email, players and special requests.
+**Booking request** (message starts with "BOOKING REQUEST", or email subject "New booking request"):
+reference (e.g. `DD-261020-7KQ3P`), court, date, time and duration, estimated total, customer name, mobile, and optionally email, players and special requests.
 
-**Payment receipt** (subject starts with "Payment receipt for"):
-reference, payment method, transaction reference number, amount paid, expected amount and whether they match, court/date/time when known, mobile, and the receipt file.
+**Payment receipt** (message starts with "PAYMENT RECEIPT", or email subject "Payment receipt for"):
+reference, payment method, transaction reference number, amount paid, the booking details when known, and the receipt screenshot. In phone mode the customer attaches the screenshot themselves; if it's missing, ask for it.
+
+Phone-mode messages are typed into the customer's own app, so they **can be edited before sending**. Always check the court, time and total against the rates on the website, and the payment against your GCash/bank records.
 
 Match the two using the **booking reference**. If two requests share a reference, it's the same customer retrying after a connection problem: keep one.
 
@@ -16,7 +25,7 @@ Match the two using the **booking reference**. If two requests share a reference
 
 1. **New request:** check the court and time in your schedule.
    - Conflict? Contact the customer and offer another slot. If they already paid, refund in full. Status: **Unavailable**.
-   - Free? Pencil it in as held. Status: **Awaiting Payment**. Unpaid requests may be released after 2 hours (the website tells customers this).
+   - Free? Pencil it in as held and reply that you received it. Status: **Awaiting Payment**. Unpaid requests may be released after 2 hours (the website tells customers this).
 2. **Receipt arrives:** status is **Payment Submitted**. Then **Under Verification** while you check:
    - Open the **GCash app / business dashboard or bank statement** and find the transaction by reference number.
    - Confirm the **amount** matches the booking total (the email says if the customer typed a different amount), the **date**, and that the money reached **our** account.
@@ -30,7 +39,8 @@ Match the two using the **booking reference**. If two requests share a reference
 
 | Status | Meaning |
 |---|---|
-| Request Submitted | The booking service received the request. |
+| Request Sent | Phone mode: the customer sent the request from their phone. Your reply confirms you received it. |
+| Request Submitted | Form service: the booking service received the request. |
 | Awaiting Payment | Request received; payment pending. |
 | Payment Submitted | Customer sent payment details / receipt. |
 | Under Verification | Staff are checking payment and court availability. |
