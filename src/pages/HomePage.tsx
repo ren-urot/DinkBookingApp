@@ -36,9 +36,11 @@ export default function HomePage() {
         />
         {/* Darkens the left side so the text stays readable over the photo. */}
         <div
-          className="absolute inset-0 -z-10 bg-gradient-to-r from-[#07160f]/90 via-[#07160f]/65 to-[#07160f]/10"
+          className="absolute inset-0 -z-10 bg-gradient-to-r from-[#07160f]/90 via-[#07160f]/70 to-[#07160f]/20"
           aria-hidden="true"
         />
+        {/* On phones the text covers the whole photo, so darken it evenly too. */}
+        <div className="absolute inset-0 -z-10 bg-[#07160f]/40 sm:hidden" aria-hidden="true" />
         <div className="container py-16 sm:py-24 lg:py-32">
           <div className="max-w-2xl">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold text-white backdrop-blur">
