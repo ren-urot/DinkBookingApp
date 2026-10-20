@@ -61,6 +61,29 @@ The website can't know about bookings by itself. To grey out times that are alre
 
 If the sheet can't be read (not shared, renamed columns, Google down), the site says so and keeps taking requests; staff check conflicts by hand as before. Rows the site can't understand are skipped and counted in the browser console.
 
+## Admin page (`/admin`)
+
+Staff manage bookings at **`/admin`** (not linked from the site, hidden from search engines). After entering the admin PIN they can:
+
+- **Add a booking** - paste the customer's booking message and the court, date, time and reference fill in automatically. The page warns about overlaps, and the script refuses double bookings unless staff choose "Save anyway".
+- **Confirm / Cancel / Restore** bookings with one tap, and copy a ready-made "your booking is CONFIRMED" message to send the customer.
+- **Open the Google Sheet** for anything else.
+
+Every change is written to the booked-slots sheet, so the time is blocked on the website within a minute, and **the customer's confirmation page and Check Booking page show the new status by themselves** (Awaiting Payment → Confirmed, or Cancelled).
+
+**One-time setup (about 5 minutes)**
+1. Open the booked-slots Google Sheet → **Extensions → Apps Script**.
+2. Delete what's in `Code.gs`, paste the whole of [docs/admin-apps-script.gs](docs/admin-apps-script.gs), and click **Save**.
+3. Click the gear (**Project Settings**) → **Script properties** → **Add script property**: name `ADMIN_PIN`, value a PIN of **at least 6 characters** that only staff know → **Save**.
+4. **Deploy → New deployment** → gear next to "Select type" → **Web app**. Set **Execute as: Me** and **Who has access: Anyone** → **Deploy**. Google asks you to authorise the script (it only touches this spreadsheet; on the "Google hasn't verified this app" screen choose **Advanced → Go to … (unsafe)** - it's your own script).
+5. Copy the **Web app URL** (ends in `/exec`). In Vercel → Project → Settings → Environment Variables add `VITE_ADMIN_SCRIPT_URL` = that URL, then redeploy.
+
+**Security notes**
+- The PIN is checked by the script on Google's side and is never in the website's code or saved in the browser. After 10 wrong PINs the script locks for 15 minutes.
+- "Who has access: Anyone" only means anyone can *call* the script; without the PIN it does nothing. The script runs as you and can only edit this spreadsheet.
+- To change the PIN, edit the `ADMIN_PIN` script property. If you edit the script code, use **Deploy → Manage deployments → Edit → Version: New version** so the URL stays the same.
+- Booking status shown to customers comes from the public sheet and is found by booking reference. The sheet has no names or phone numbers, so this reveals only the court, time and status.
+
 ## Optional: choosing a form service
 
 Phone mode needs nothing here. A form service adds email notifications, a submissions list for staff, and confirmed receipt of each request.

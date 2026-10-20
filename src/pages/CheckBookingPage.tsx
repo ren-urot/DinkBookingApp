@@ -10,14 +10,35 @@ import { ContactCard } from "@/components/facility";
 import { StatusBadge, StatusGlossary } from "@/components/status";
 import { statusInfo } from "@/config/statuses";
 import { useBooking } from "@/context/BookingContext";
-import { isLookupEnabled, lookupBooking, type LookupResponse } from "@/lib/external";
+import { clearBookedSheetCache, fetchSheetStatus, isLookupEnabled, isSheetStatusEnabled, lookupBooking, type LookupResponse } from "@/lib/external";
 import { EXAMPLE_REFERENCE } from "@/lib/reference";
-import { formatDate, isValidDateString } from "@/lib/time";
+import { formatDate, formatTimeRange, isValidDateString } from "@/lib/time";
+
+/** Reference-only lookup in the facility's public schedule sheet, shaped like the secure lookup's result. */
+async function lookupInSheet(reference: string): Promise<LookupResponse> {
+  clearBookedSheetCache(); // always show the latest status
+  const r = await fetchSheetStatus(reference);
+  if (r.kind === "not_found") return { kind: "not_found" };
+  if (r.kind !== "found") return { kind: "error", message: "We couldn't read the facility's schedule right now." };
+  const b = r.booking;
+  return {
+    kind: "found",
+    booking: {
+      status: b.status,
+      court: b.court?.name,
+      date: b.date,
+      time: b.start != null && b.end != null ? formatTimeRange(b.start, b.end - b.start) : undefined,
+    },
+  };
+}
 import { isValidReference, normalizePhMobile, normalizeReference } from "@/lib/validation";
 
 export default function CheckBookingPage() {
   const { submitted } = useBooking();
   const lookupEnabled = isLookupEnabled();
+  // Without a secure lookup service, the facility's schedule sheet can still show a booking's
+  // status by reference. The sheet holds no personal data, so no mobile number is needed.
+  const sheetLookup = !lookupEnabled && isSheetStatusEnabled();
   const [reference, setReference] = useState(submitted?.reference ?? "");
   const [mobile, setMobile] = useState("");
   const [errors, setErrors] = useState<{ reference?: string; mobile?: string }>({});
@@ -30,12 +51,12 @@ export default function CheckBookingPage() {
     const found: typeof errors = {};
     if (!isValidReference(reference)) found.reference = `Enter your booking reference, e.g. ${EXAMPLE_REFERENCE}.`;
     const normalized = normalizePhMobile(mobile);
-    if (!normalized) found.mobile = "Enter the mobile number you used when booking.";
+    if (!sheetLookup && !normalized) found.mobile = "Enter the mobile number you used when booking.";
     setErrors(found);
-    if (Object.keys(found).length || !normalized) return;
+    if (Object.keys(found).length) return;
     setLoading(true);
     setResult(null);
-    setResult(await lookupBooking(normalizeReference(reference), normalized));
+    setResult(sheetLookup ? await lookupInSheet(normalizeReference(reference)) : await lookupBooking(normalizeReference(reference), normalized!));
     setLoading(false);
   }
 
@@ -44,11 +65,15 @@ export default function CheckBookingPage() {
       <PageHeader
         eyebrow="Bookings"
         title="Check your booking"
-        description="Enter your booking reference and the mobile number you used to book."
+        description={
+          sheetLookup
+            ? "Enter your booking reference to see the latest status from the facility's schedule."
+            : "Enter your booking reference and the mobile number you used to book."
+        }
       />
       <div className="container grid gap-8 py-8 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
-          {!lookupEnabled && (
+          {!lookupEnabled && !sheetLookup && (
             <Alert variant="info">
               <AlertTriangle />
               <AlertTitle>Online status lookup isn't available yet</AlertTitle>
@@ -76,7 +101,7 @@ export default function CheckBookingPage() {
             </Card>
           )}
 
-          {lookupEnabled && (
+          {(lookupEnabled || sheetLookup) && (
             <form onSubmit={submit} noValidate className="space-y-5" aria-label="Booking lookup">
               <Card>
                 <CardContent className="space-y-5 pt-5 sm:pt-6">
@@ -93,18 +118,20 @@ export default function CheckBookingPage() {
                       maxLength={20}
                     />
                   </Field>
-                  <Field id="mobile" label="Mobile number" required error={errors.mobile}>
-                    <Input
-                      {...fieldAria("mobile", errors.mobile)}
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      value={mobile}
-                      onChange={(e) => setMobile(e.target.value)}
-                      placeholder="0917 123 4567"
-                      maxLength={20}
-                    />
-                  </Field>
+                  {!sheetLookup && (
+                    <Field id="mobile" label="Mobile number" required error={errors.mobile}>
+                      <Input
+                        {...fieldAria("mobile", errors.mobile)}
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="0917 123 4567"
+                        maxLength={20}
+                      />
+                    </Field>
+                  )}
                 </CardContent>
               </Card>
               <Button type="submit" size="xl" disabled={loading} aria-busy={loading} className="w-full sm:w-auto">
@@ -142,7 +169,9 @@ export default function CheckBookingPage() {
                 <AlertTriangle />
                 <AlertTitle>No matching booking found</AlertTitle>
                 <AlertDescription>
-                  Check the reference and mobile number. New requests can take a few minutes to appear. Still stuck? Contact the front desk.
+                  {sheetLookup
+                    ? "It's not in the facility's schedule yet - staff add bookings after reviewing your request, so check again later. Double-check the reference too. Still stuck? Contact the front desk."
+                    : "Check the reference and mobile number. New requests can take a few minutes to appear. Still stuck? Contact the front desk."}
                 </AlertDescription>
               </Alert>
             )}

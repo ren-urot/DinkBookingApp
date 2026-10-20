@@ -61,6 +61,10 @@ export const services = {
   availabilityEndpoint: readUrl(env.VITE_AVAILABILITY_ENDPOINT),
   /** Google Sheet of confirmed/held bookings; those times are greyed out. See README. */
   bookedSheetUrl: toSheetCsvUrl(env.VITE_BOOKED_SHEET_URL),
+  /** The sheet's normal link, for the admin page's "Open Google Sheet" button. */
+  bookedSheetEditUrl: readUrl(env.VITE_BOOKED_SHEET_URL),
+  /** Google Apps Script web app (/exec) used by /admin to update the sheet. PIN-protected on Google's side. */
+  adminScriptUrl: readUrl(env.VITE_ADMIN_SCRIPT_URL),
   /** Netlify form names; must match the hidden forms in public/__forms.html. */
   netlifyForms: { booking: "booking-request", receipt: "payment-receipt" },
   requestTimeoutMs: 20_000,

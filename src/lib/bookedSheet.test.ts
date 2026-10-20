@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toSheetCsvUrl } from "@/config/services";
-import { buildBookedIndex, matchCourt, parseCsv, parseSheetDate, parseSheetTime } from "./bookedSheet";
+import { buildBookedIndex, matchCourt, parseCsv, parseSheetDate, parseSheetTime, sheetStatusToBookingStatus } from "./bookedSheet";
 
 describe("toSheetCsvUrl", () => {
   const id = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms";
@@ -97,6 +97,33 @@ describe("buildBookedIndex", () => {
     expect(index.has("court-2|2026-10-22")).toBe(false);
     expect(index.get("court-3|2026-10-22")).toEqual([{ start: 1260, end: 1440 }]);
     expect(skipped).toBe(2); // unknown court C9, end before start
+  });
+
+  it("indexes statuses by booking reference for customers", () => {
+    const csv = [
+      "Court,Date,Start,End,Status,Reference",
+      "C1,2026-10-22,18:00,20:00,Confirmed,dd-261020-aaaaa",
+      "C2,2026-10-22,18:00,19:00,Held,DD-261020-BBBBB",
+      "C2,2026-10-23,18:00,19:00,Cancelled,DD-261020-BBBBB",
+      "C3,2026-10-22,07:00,08:00,Cancelled,DD-261020-CCCCC",
+    ].join("\n");
+    const { byReference } = buildBookedIndex(csv);
+    expect(byReference.get("DD-261020-AAAAA")).toMatchObject({ status: "confirmed", date: "2026-10-22", start: 1080, end: 1200 });
+    expect(byReference.get("DD-261020-AAAAA")?.court?.id).toBe("court-1");
+    // a later cancelled row doesn't hide the active one
+    expect(byReference.get("DD-261020-BBBBB")).toMatchObject({ status: "awaiting_payment", date: "2026-10-22" });
+    expect(byReference.get("DD-261020-CCCCC")?.status).toBe("cancelled");
+  });
+
+  it.each([
+    ["Confirmed", "confirmed"],
+    ["Held", "awaiting_payment"],
+    ["", "awaiting_payment"],
+    ["Under verification", "under_verification"],
+    ["Cancelled", "cancelled"],
+    ["Unavailable", "unavailable"],
+  ])("maps sheet status %s", (raw, status) => {
+    expect(sheetStatusToBookingStatus(raw)).toBe(status);
   });
 
   it("ignores the whole sheet when required columns are missing", () => {

@@ -1,6 +1,6 @@
 import { services } from "@/config/services";
 import { parseStatus, type BookingStatus } from "@/config/statuses";
-import { buildBookedIndex, type BookedIndex } from "./bookedSheet";
+import { buildBookedIndex, type BookedIndex, type SheetBooking } from "./bookedSheet";
 import type { BookedRange } from "./schedule";
 import { toMinutes } from "./time";
 
@@ -18,34 +18,57 @@ const AVAILABILITY_TIMEOUT_MS = 8_000;
 /** How long one download of the booked-slots sheet is reused before re-checking. */
 const SHEET_CACHE_MS = 60_000;
 
-let sheetCache: { at: number; index: Promise<BookedIndex> } | null = null;
+type LoadedSheet = { index: BookedIndex; byReference: Map<string, SheetBooking> };
+let sheetCache: { at: number; sheet: Promise<LoadedSheet> } | null = null;
 
-function loadBookedSheet(url: string): Promise<BookedIndex> {
-  if (sheetCache && Date.now() - sheetCache.at < SHEET_CACHE_MS) return sheetCache.index;
+function loadBookedSheet(url: string): Promise<LoadedSheet> {
+  if (sheetCache && Date.now() - sheetCache.at < SHEET_CACHE_MS) return sheetCache.sheet;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AVAILABILITY_TIMEOUT_MS);
-  const index = fetch(url, { signal: controller.signal, credentials: "omit", cache: "no-store" })
+  const sheet = fetch(url, { signal: controller.signal, credentials: "omit", cache: "no-store" })
     .then(async (res) => {
       if (!res.ok) throw new Error(`Booked-slots sheet returned HTTP ${res.status}`);
       const text = await res.text();
       // A private sheet answers with Google's sign-in page instead of CSV.
       if (/^\s*</.test(text)) throw new Error("Booked-slots sheet is not shared publicly");
-      const { index, skipped } = buildBookedIndex(text);
+      const { index, byReference, skipped } = buildBookedIndex(text);
       if (skipped) console.warn(`[availability] Ignored ${skipped} sheet row(s) with a missing or unreadable court, date or time.`);
-      return index;
+      return { index, byReference };
     })
     .finally(() => clearTimeout(timer));
-  sheetCache = { at: Date.now(), index };
-  index.catch(() => {
+  sheetCache = { at: Date.now(), sheet };
+  sheet.catch(() => {
     sheetCache = null; // retry on the next request instead of caching the failure
   });
-  return index;
+  return sheet;
+}
+
+/** Forget the cached sheet, e.g. right after an admin edit, so the next read is fresh. */
+export function clearBookedSheetCache() {
+  sheetCache = null;
+}
+
+export type SheetStatusResult = { kind: "found"; booking: SheetBooking } | { kind: "not_found" } | { kind: "disabled" } | { kind: "error" };
+
+export const isSheetStatusEnabled = () => Boolean(services.bookedSheetUrl);
+
+/** Looks up a booking reference in the facility's sheet. The sheet holds no personal data. */
+export async function fetchSheetStatus(reference: string): Promise<SheetStatusResult> {
+  if (!services.bookedSheetUrl) return { kind: "disabled" };
+  try {
+    const { byReference } = await loadBookedSheet(services.bookedSheetUrl);
+    const booking = byReference.get(reference.trim().toUpperCase());
+    return booking ? { kind: "found", booking } : { kind: "not_found" };
+  } catch (err) {
+    console.error("[status]", err);
+    return { kind: "error" };
+  }
 }
 
 export async function fetchAvailability(courtId: string, date: string, signal?: AbortSignal): Promise<AvailabilityResult> {
   if (services.bookedSheetUrl) {
     try {
-      const index = await loadBookedSheet(services.bookedSheetUrl);
+      const { index } = await loadBookedSheet(services.bookedSheetUrl);
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       return { status: "ok", booked: index.get(`${courtId}|${date}`) ?? [] };
     } catch (err) {

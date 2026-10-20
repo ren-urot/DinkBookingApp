@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getCourt } from "@/config/courts";
 import { facility } from "@/config/facility";
-import { bookingMessage, messageLinks, receiptMessage } from "./message";
+import { bookingMessage, messageLinks, parseBookingMessage, receiptMessage } from "./message";
 import { calculateFee } from "./pricing";
 
 const court = getCourt("court-2")!;
@@ -57,6 +57,33 @@ describe("receiptMessage", () => {
     expect(text).toContain("Transaction ref: 1234567890123");
     expect(text).toContain("For booking:");
     expect(text).not.toContain("Mobile:");
+  });
+});
+
+describe("parseBookingMessage", () => {
+  it("reads back everything the admin needs from a customer's message", () => {
+    expect(parseBookingMessage(bookingMessage(booking).text)).toEqual({
+      reference: "DD-261020-7KQ3P",
+      courtId: "court-2",
+      date: "2026-10-22",
+      start: 18 * 60,
+      end: 20 * 60,
+    });
+  });
+
+  it("copes with forwarded text and full court names", () => {
+    const text = "Fwd: from +63917...\n\nBOOKING REQUEST dd-261020-abcde\nCourt: Court 1 - Center Court\nDate: Saturday, October 24, 2026\nTime: 9:00 PM - 12:00 AM (3 hours)";
+    expect(parseBookingMessage(text)).toEqual({
+      reference: "DD-261020-ABCDE",
+      courtId: "court-1",
+      date: "2026-10-24",
+      start: 21 * 60,
+      end: 24 * 60,
+    });
+  });
+
+  it("returns nothing for unrelated text", () => {
+    expect(parseBookingMessage("hello, is court 2 free tomorrow?")).toEqual({});
   });
 });
 

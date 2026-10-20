@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { CalendarPlus, CheckCircle2, Clock, Upload } from "lucide-react";
+import { CalendarPlus, CheckCircle2, Clock, Upload, XCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,13 +10,56 @@ import { PaymentInstructions } from "@/components/payment";
 import { StatusBadge, StatusTimeline } from "@/components/status";
 import { bookingRules, facility } from "@/config/facility";
 import { services } from "@/config/services";
+import type { BookingStatus } from "@/config/statuses";
 import type { PaymentMethod } from "@/config/payment";
 import { useBooking } from "@/context/BookingContext";
 import { bookingFromParams, bookingToParams } from "@/lib/bookingUrl";
+import { clearBookedSheetCache, fetchSheetStatus, isSheetStatusEnabled, type SheetStatusResult } from "@/lib/external";
 import { formatPeso } from "@/lib/pricing";
 import type { BookingSummary } from "@/lib/submit";
-import { facilityNow, formatDate, formatDuration, formatTimeRange } from "@/lib/time";
+import { facilityNow, formatDate, formatDuration, formatTime, formatTimeRange } from "@/lib/time";
 import { formatPhMobile } from "@/lib/validation";
+
+const SHEET_POLL_MS = 60_000;
+
+/** Reads this booking's status from the facility's sheet, re-checking every minute. */
+function useSheetStatus(reference: string | null) {
+  const [state, setState] = useState<{ result: SheetStatusResult; checkedAt: string } | null>(null);
+  useEffect(() => {
+    if (!reference || !isSheetStatusEnabled()) return;
+    let alive = true;
+    const check = () =>
+      fetchSheetStatus(reference).then((result) => {
+        if (alive && result.kind !== "error") setState({ result, checkedAt: formatTime(facilityNow().minutes) });
+      });
+    check();
+    const id = setInterval(() => {
+      clearBookedSheetCache();
+      check();
+    }, SHEET_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [reference]);
+  return state;
+}
+
+const PROGRESS: Partial<Record<BookingStatus, number>> = {
+  request_sent: 0,
+  request_submitted: 0,
+  awaiting_payment: 1,
+  payment_submitted: 2,
+  under_verification: 3,
+  confirmed: 4,
+};
+
+/** Staff's cancellations always win; otherwise show whichever status is further along. */
+function combineStatus(local: BookingStatus, staff: BookingStatus | null): BookingStatus {
+  if (!staff) return local;
+  if (staff === "cancelled" || staff === "unavailable") return staff;
+  return (PROGRESS[staff] ?? 0) > (PROGRESS[local] ?? 0) ? staff : local;
+}
 
 export default function ConfirmationPage() {
   const { submitted, receiptSentFor } = useBooking();
@@ -33,6 +76,7 @@ export default function ConfirmationPage() {
   const fromUrl = bookingFromParams(params);
   const booking: BookingSummary | null =
     submitted && (!fromUrl || fromUrl.reference === submitted.reference) ? submitted : fromUrl;
+  const sheet = useSheetStatus(booking?.reference ?? null);
   if (!booking) return <Navigate to="/check-booking" replace />;
 
   const receiptVia = receiptSentFor[booking.reference];
@@ -41,7 +85,12 @@ export default function ConfirmationPage() {
   // Sent from the customer's phone (phone mode, or the backup after a service error): the site
   // only knows the customer says they sent it, not that it arrived.
   const sentByPhone = phoneMode || params.get("via") === "phone";
-  const status = receiptSent ? "payment_submitted" : sentByPhone ? "request_sent" : "awaiting_payment";
+  const localStatus: BookingStatus = receiptSent ? "payment_submitted" : sentByPhone ? "request_sent" : "awaiting_payment";
+  // The facility's sheet is the authority once staff have added the booking.
+  const staffStatus = sheet?.result.kind === "found" ? sheet.result.booking.status : null;
+  const status = combineStatus(localStatus, staffStatus);
+  const closed = status === "cancelled" || status === "unavailable";
+  const confirmed = status === "confirmed";
   const payParams = bookingToParams(booking);
   payParams.set("method", method);
   if (sentByPhone && !phoneMode) payParams.set("via", "phone");
@@ -51,15 +100,30 @@ export default function ConfirmationPage() {
   return (
     <div className="container max-w-4xl py-8 sm:py-12">
       <div className="mb-8 text-center">
-        <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-primary" aria-hidden="true" />
+        {closed ? (
+          <XCircle className="mx-auto mb-3 h-14 w-14 text-destructive" aria-hidden="true" />
+        ) : (
+          <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-primary" aria-hidden="true" />
+        )}
         <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-tight outline-none sm:text-3xl">
-          {sentByPhone ? "Booking request sent" : "Booking request submitted"}
+          {confirmed
+            ? "Booking confirmed!"
+            : status === "cancelled"
+              ? "Booking cancelled"
+              : status === "unavailable"
+                ? "This time is unavailable"
+                : sentByPhone
+                  ? "Booking request sent"
+                  : "Booking request submitted"}
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-          Your booking request has been submitted. Please complete your payment and wait for the facility to verify your
-          payment and confirm your reservation.
+          {confirmed
+            ? "The facility verified your payment and confirmed your reservation. See you on the court - please arrive 10 minutes early."
+            : closed
+              ? `This booking is no longer active. If you already paid, the facility will contact you about your refund, or call ${facility.contact.phone}.`
+              : "Your booking request has been submitted. Please complete your payment and wait for the facility to verify your payment and confirm your reservation."}
         </p>
-        {sentByPhone && (
+        {sentByPhone && !staffStatus && (
           <p className="mx-auto mt-3 max-w-xl rounded-lg bg-secondary p-3 text-sm">
             The facility will reply to your message to let you know they received it. No reply within 30 minutes during
             staff hours ({facility.contact.responseHours})? Call {facility.contact.phone}.
@@ -102,7 +166,13 @@ export default function ConfirmationPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>Current status</CardTitle>
-            <CardDescription>We'll contact you by SMS{booking.email ? " or email" : ""} when staff update your booking.</CardDescription>
+            <CardDescription>
+              {sheet?.result.kind === "found"
+                ? `From the facility's schedule, checked at ${sheet.checkedAt}. This page updates by itself.`
+                : sheet?.result.kind === "not_found"
+                  ? "Not in the facility's schedule yet - staff add it after reviewing your request. This page updates by itself."
+                  : `We'll contact you by SMS${booking.email ? " or email" : ""} when staff update your booking.`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <StatusTimeline current={status} sentByPhone={sentByPhone} />
@@ -110,7 +180,8 @@ export default function ConfirmationPage() {
         </Card>
       </div>
 
-      {receiptSent ? (
+      {/* Payment steps only matter while the booking is still open and unconfirmed. */}
+      {confirmed || closed ? null : receiptSent ? (
         <Alert variant="success" className="mt-6">
           <CheckCircle2 />
           <AlertTitle>{receiptVia === "phone" ? "Payment details sent" : "Payment details received"}</AlertTitle>

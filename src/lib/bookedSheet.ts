@@ -1,4 +1,5 @@
 import { courts, type Court } from "@/config/courts";
+import { parseStatus, type BookingStatus } from "@/config/statuses";
 import type { BookedRange } from "./schedule";
 import { isValidDateString } from "./time";
 
@@ -98,26 +99,66 @@ export function parseSheetTime(value: string): number | null {
 
 const IGNORED_STATUS = /cancel|releas|unavailable|void|reject|declin/i;
 
-export function buildBookedIndex(csv: string): { index: BookedIndex; skipped: number } {
+/** What the facility's sheet says about one booking reference (no personal data). */
+export interface SheetBooking {
+  status: BookingStatus;
+  court?: Court;
+  date?: string;
+  start?: number;
+  end?: number;
+}
+
+/** Maps the free-text Status column to the statuses customers see. */
+export function sheetStatusToBookingStatus(raw: string): BookingStatus {
+  const v = raw.trim().toLowerCase();
+  if (/confirm|paid|approved/.test(v)) return "confirmed";
+  if (/unavailable|reject|declin/.test(v)) return "unavailable";
+  if (/cancel|releas|void/.test(v)) return "cancelled";
+  if (/verif|check/.test(v)) return "under_verification";
+  return parseStatus(raw) ?? "awaiting_payment"; // Held, blank, Pending...
+}
+
+export function buildBookedIndex(csv: string): { index: BookedIndex; byReference: Map<string, SheetBooking>; skipped: number } {
   const [header = [], ...rows] = parseCsv(csv).filter((r) => r.some((cell) => cell.trim() !== ""));
   const col = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name);
-  const [ci, di, si, ei, sti] = [col("court"), col("date"), col("start"), col("end"), col("status")];
+  const [ci, di, si, ei, sti, ri] = [col("court"), col("date"), col("start"), col("end"), col("status"), col("reference")];
   const index: BookedIndex = new Map();
+  const byReference = new Map<string, SheetBooking>();
   let skipped = 0;
-  if (ci < 0 || di < 0 || si < 0 || ei < 0) return { index, skipped: rows.length };
+  if (ci < 0 || di < 0 || si < 0 || ei < 0) return { index, byReference, skipped: rows.length };
   for (const r of rows) {
-    if (sti >= 0 && IGNORED_STATUS.test(r[sti] ?? "")) continue;
+    const rawStatus = sti >= 0 ? (r[sti] ?? "") : "";
     const court = matchCourt(r[ci] ?? "");
     const date = parseSheetDate(r[di] ?? "");
     const start = parseSheetTime(r[si] ?? "");
     let end = parseSheetTime(r[ei] ?? "");
     if (end === 0) end = 24 * 60; // "12:00 AM" end means midnight
-    if (!court || !date || start == null || end == null || end <= start) {
+    const valid = Boolean(court && date && start != null && end != null && end > start);
+
+    const reference = ri >= 0 ? (r[ri] ?? "").trim().toUpperCase() : "";
+    if (reference) {
+      // An active row wins over an older cancelled one with the same reference.
+      const status = sheetStatusToBookingStatus(rawStatus);
+      const previous = byReference.get(reference);
+      const previousActive = previous && previous.status !== "cancelled" && previous.status !== "unavailable";
+      if (!previousActive || !IGNORED_STATUS.test(rawStatus)) {
+        byReference.set(reference, {
+          status,
+          court,
+          date: date ?? undefined,
+          start: start ?? undefined,
+          end: end ?? undefined,
+        });
+      }
+    }
+
+    if (IGNORED_STATUS.test(rawStatus)) continue;
+    if (!valid) {
       skipped++;
       continue;
     }
-    const key = `${court.id}|${date}`;
-    index.set(key, [...(index.get(key) ?? []), { start, end }]);
+    const key = `${court!.id}|${date}`;
+    index.set(key, [...(index.get(key) ?? []), { start: start!, end: end! }]);
   }
-  return { index, skipped };
+  return { index, byReference, skipped };
 }

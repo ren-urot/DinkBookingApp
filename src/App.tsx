@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { Layout } from "@/components/Layout";
 import { BookingProvider } from "@/context/BookingContext";
+import AdminPage from "@/pages/AdminPage";
 import BookPage from "@/pages/BookPage";
 import CheckBookingPage from "@/pages/CheckBookingPage";
 import ConfirmationPage from "@/pages/ConfirmationPage";
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="contact" element={<ContactPage />} />
             <Route path="policies" element={<PoliciesPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

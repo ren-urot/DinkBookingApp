@@ -1,5 +1,6 @@
 import { facility } from "@/config/facility";
 import { paymentMethodLabel, type PaymentMethod } from "@/config/payment";
+import { matchCourt, parseSheetDate, parseSheetTime } from "./bookedSheet";
 import { formatPeso } from "./pricing";
 import type { BookingRequest, BookingSummary } from "./submit";
 import { formatDate, formatDuration, formatTimeRange } from "./time";
@@ -64,6 +65,40 @@ export function receiptMessage(r: {
     subject: `Payment receipt ${r.reference} - ${paymentMethodLabel[r.method]} ${formatPeso(r.amountPaid)}`,
     text: lines.join("\n"),
   };
+}
+
+export interface ParsedBookingMessage {
+  reference?: string;
+  courtId?: string;
+  date?: string;
+  start?: number;
+  end?: number;
+}
+
+/**
+ * Reads a pasted "BOOKING REQUEST" message (see bookingMessage) back into
+ * fields for the admin page. Tolerates edits and forwarded-message noise;
+ * anything it can't find is simply left out.
+ */
+export function parseBookingMessage(text: string): ParsedBookingMessage {
+  const out: ParsedBookingMessage = {};
+  const line = (label: string) => text.match(new RegExp(`^\\s*${label}\\s*:\\s*(.+)$`, "im"))?.[1].trim();
+  const reference = text.match(/\b([A-Z]{2,4}-\d{6}-[A-Z0-9]{5})\b/i)?.[1];
+  if (reference) out.reference = reference.toUpperCase();
+  const court = line("Court");
+  if (court) out.courtId = matchCourt(court)?.id;
+  const date = line("Date");
+  if (date) out.date = parseSheetDate(date.replace(/^[A-Za-z]+,\s*/, "")) ?? undefined; // drop "Thursday, "
+  const time = line("Time");
+  const range = time?.match(/^(.+?)\s*[-–]\s*(.+?)(?:\s*\(.*\))?$/);
+  if (range) {
+    const start = parseSheetTime(range[1]);
+    let end = parseSheetTime(range[2]);
+    if (end === 0) end = 24 * 60;
+    if (start != null) out.start = start;
+    if (end != null) out.end = end;
+  }
+  return out;
 }
 
 /** Deep links that open the customer's app with the message pre-filled. */

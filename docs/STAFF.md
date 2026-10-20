@@ -23,7 +23,9 @@ Match the two using the **booking reference**. If two requests share a reference
 
 ## Daily workflow
 
-The **booked-slots Google Sheet** is your schedule. Every time you add a row, the website greys out that court and time within about a minute, so nobody else can request it. Rows with Status `Confirmed` or `Held` block the time; change Status to `Cancelled` (or delete the row) to free it. **Only court, date, times, status and reference go in the sheet - never names or phone numbers.** It's readable by anyone with the link.
+**Use the admin page:** open `/admin` on the website (e.g. https://dinkbookingapp.vercel.app/admin) and enter the staff PIN. Paste a customer's booking message to add it as **Held**, then tap **Confirm** once payment is verified, or **Cancel** to free the time. The customer's page updates to Confirmed or Cancelled by itself within a minute, but still send them the confirmation message (the admin page can copy it for you).
+
+The **booked-slots Google Sheet** is your schedule (the admin page edits it for you; you can also edit it directly). Every time you add a row, the website greys out that court and time within about a minute, so nobody else can request it. Rows with Status `Confirmed` or `Held` block the time; change Status to `Cancelled` (or delete the row) to free it. **Only court, date, times, status and reference go in the sheet - never names or phone numbers.** It's readable by anyone with the link.
 
 1. **New request:** check the court and time in the sheet.
    - Conflict? Contact the customer and offer another slot. If they already paid, refund in full. Status: **Unavailable**.
