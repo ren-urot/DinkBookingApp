@@ -48,8 +48,8 @@ export default function HomePage() {
               Now booking up to {bookingRules.advanceBookingDays} days ahead
             </p>
             <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight drop-shadow sm:text-5xl lg:text-6xl">
-              {facility.tagline.split(". ")[0]}.{" "}
-              <span className="text-ball">{facility.tagline.split(". ").slice(1).join(". ")}</span>
+              {facility.tagline.split(". ")[0]}.
+              <span className="block text-ball">{facility.tagline.split(". ").slice(1).join(". ")}</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg text-white/85">{facility.intro}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
