@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex" />
+    <title>Forms</title>
+  </head>
+  <body>
+    <!--
+      Netlify Forms definitions (only used when VITE_SUBMISSION_PROVIDER=netlify).
+      The app posts submissions to /__forms.html. Field names must match src/lib/submit.ts.
+    -->
+    <form name="booking-request" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input name="bot-field" /><input name="subject" />
+      <input name="booking_reference" /><input name="status" /><input name="court" /><input name="court_id" />
+      <input name="court_type" /><input name="date" /><input name="date_display" /><input name="start_time" />
+      <input name="end_time" /><input name="time_display" /><input name="duration_minutes" />
+      <input name="duration_display" /><input name="estimated_total_php" /><input name="fee_breakdown" />
+      <input name="full_name" /><input name="mobile" /><input name="email" /><input name="players" />
+      <textarea name="special_requests"></textarea><input name="submitted_at" /><input name="staff_note" />
+    </form>
+    <form name="payment-receipt" data-netlify="true" netlify-honeypot="bot-field" enctype="multipart/form-data" hidden>
+      <input name="bot-field" /><input name="subject" />
+      <input name="booking_reference" /><input name="status" /><input name="payment_method" />
+      <input name="transaction_reference" /><input name="amount_paid_php" /><input name="expected_amount_php" />
+      <input name="amount_matches" /><input name="court" /><input name="date_display" /><input name="time_display" />
+      <input name="full_name" /><input name="mobile" /><input name="submitted_at" />
+      <input name="staff_note" /><input type="file" name="receipt" />
+    </form>
+  </body>
+</html>

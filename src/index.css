@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 90 20% 98%;
+    --foreground: 160 30% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 160 30% 10%;
+    --primary: 148 64% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 30% 94%;
+    --secondary-foreground: 150 45% 18%;
+    --muted: 120 12% 95%;
+    --muted-foreground: 160 8% 38%;
+    --accent: 76 85% 92%;
+    --accent-foreground: 150 50% 18%;
+    --ball: 72 95% 52%;
+    --ball-foreground: 150 50% 12%;
+    --warning: 40 96% 92%;
+    --warning-foreground: 28 80% 26%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 12% 88%;
+    --input: 140 10% 82%;
+    --ring: 148 64% 30%;
+    --radius: 0.85rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Leave room for anchored headings under the sticky header */
+  [id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .bg-court-pattern {
+    background-image:
+      radial-gradient(circle at 20% 20%, hsl(var(--ball) / 0.25), transparent 40%),
+      radial-gradient(circle at 85% 10%, hsl(var(--primary) / 0.25), transparent 45%);
+  }
+  .slot-unavailable {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      hsl(var(--muted)),
+      hsl(var(--muted)) 6px,
+      hsl(var(--border)) 6px,
+      hsl(var(--border)) 8px
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
