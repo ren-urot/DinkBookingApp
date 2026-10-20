@@ -50,7 +50,9 @@ export function SendViaPhone({ message, file, onSent, sentLabel, title = "Send i
   async function share() {
     try {
       await navigator.share({ title: message.subject, text: message.text, ...(canShareFile && file ? { files: [file] } : {}) });
-      setOpened(true);
+      // The share only resolves once the customer has completed it in the chosen app
+      // (cancelling rejects with AbortError), so go straight to the "sent" page.
+      onSent();
     } catch (err) {
       if ((err as Error).name !== "AbortError") toast.error("Sharing didn't work here. Try one of the buttons below.");
     }
@@ -74,7 +76,8 @@ export function SendViaPhone({ message, file, onSent, sentLabel, title = "Send i
       <CardHeader className="pb-3">
         <CardTitle>{title}</CardTitle>
         <CardDescription>
-          1. Tap an app below. 2. Press <strong>Send</strong> in that app. 3. Come back here and confirm.
+          1. Tap an app below. 2. Press <strong>Send</strong> in that app. 3. Come back here and tap{" "}
+          <strong>{sentLabel}</strong> at the bottom.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -122,19 +125,14 @@ export function SendViaPhone({ message, file, onSent, sentLabel, title = "Send i
         <div
           ref={confirmRef}
           className={cn(
-            "scroll-mt-24 space-y-2 rounded-lg p-3 transition-shadow",
-            opened ? "bg-secondary" : "bg-muted/60",
+            "scroll-mt-24 space-y-2 rounded-lg bg-secondary p-3 transition-shadow",
             returned && "ring-2 ring-primary ring-offset-2",
           )}
         >
           <p className="text-sm font-semibold" aria-live="polite">
-            {returned
-              ? "Welcome back! Did you press Send? Tap below to finish."
-              : opened
-                ? "Did you press Send in your app?"
-                : "Already sent it another way?"}
+            {returned ? "Welcome back! Did you press Send? Tap below to finish." : "Sent it? Tap here to finish:"}
           </p>
-          <Button type="button" size="lg" variant={opened ? "default" : "outline"} className="w-full" onClick={onSent}>
+          <Button type="button" size="xl" className="w-full" onClick={onSent}>
             <CheckCircle2 /> {sentLabel}
           </Button>
           <p className="text-xs text-muted-foreground">
