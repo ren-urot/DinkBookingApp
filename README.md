@@ -37,6 +37,30 @@ In `demo` mode a yellow banner shows at the top and **nothing is sent anywhere**
 5. **Test delivery.** Phone mode: from a real phone, send one booking and one receipt through each channel (SMS, Viber, Messenger, email) and check they arrive at the facility's number, Viber, Facebook Page inbox and email. Form service: do one real booking **and** one receipt upload with a file, and check both arrive and the receipt opens.
 6. **Access and retention.** Keep the facility phone, Viber, Page inbox and email (or the form service) limited to authorised staff with 2-factor login, and delete old booking messages on a schedule (PRD section 8).
 
+## Blocking booked times with a Google Sheet
+
+The website can't know about bookings by itself. To grey out times that are already taken, staff keep a Google Sheet and the site reads it (still no server or database of your own). Changes show on the site within about a minute.
+
+**One-time setup**
+1. In Google Sheets, **File → Import** [docs/booked-slots-template.csv](docs/booked-slots-template.csv), or create a sheet whose **first tab** has these headers in row 1: `Court`, `Date`, `Start`, `End`, `Status`, `Reference`.
+2. Select the Date, Start and End columns → **Format → Number → Plain text**, so Google doesn't reformat them.
+3. **Share → General access → Anyone with the link → Viewer**, then copy the link.
+4. In Vercel → Project → Settings → Environment Variables, add `VITE_BOOKED_SHEET_URL` = that link, then redeploy (or push any commit).
+
+**Filling it in** (one row per booking)
+
+| Column | What to type | Examples |
+|---|---|---|
+| Court | Court code, number or name | `C1`, `2`, `Court 3` |
+| Date | Year-month-day | `2026-10-24` |
+| Start / End | 24-hour or AM/PM | `18:00`, `8:00 PM` |
+| Status | `Confirmed` or `Held` block the time; `Cancelled` frees it | `Confirmed` |
+| Reference | Optional booking reference | `DD-261020-7KQ3P` |
+
+**Anyone with the link can read this sheet** (the link is inside the website's code). Never put names, phone numbers or payment details in it.
+
+If the sheet can't be read (not shared, renamed columns, Google down), the site says so and keeps taking requests; staff check conflicts by hand as before. Rows the site can't understand are skipped and counted in the browser console.
+
 ## Optional: choosing a form service
 
 Phone mode needs nothing here. A form service adds email notifications, a submissions list for staff, and confirmed receipt of each request.

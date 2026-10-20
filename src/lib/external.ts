@@ -1,5 +1,6 @@
 import { services } from "@/config/services";
 import { parseStatus, type BookingStatus } from "@/config/statuses";
+import { buildBookedIndex, type BookedIndex } from "./bookedSheet";
 import type { BookedRange } from "./schedule";
 import { toMinutes } from "./time";
 
@@ -14,8 +15,45 @@ export type AvailabilityResult =
   | { status: "error" };
 
 const AVAILABILITY_TIMEOUT_MS = 8_000;
+/** How long one download of the booked-slots sheet is reused before re-checking. */
+const SHEET_CACHE_MS = 60_000;
+
+let sheetCache: { at: number; index: Promise<BookedIndex> } | null = null;
+
+function loadBookedSheet(url: string): Promise<BookedIndex> {
+  if (sheetCache && Date.now() - sheetCache.at < SHEET_CACHE_MS) return sheetCache.index;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AVAILABILITY_TIMEOUT_MS);
+  const index = fetch(url, { signal: controller.signal, credentials: "omit", cache: "no-store" })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`Booked-slots sheet returned HTTP ${res.status}`);
+      const text = await res.text();
+      // A private sheet answers with Google's sign-in page instead of CSV.
+      if (/^\s*</.test(text)) throw new Error("Booked-slots sheet is not shared publicly");
+      const { index, skipped } = buildBookedIndex(text);
+      if (skipped) console.warn(`[availability] Ignored ${skipped} sheet row(s) with a missing or unreadable court, date or time.`);
+      return index;
+    })
+    .finally(() => clearTimeout(timer));
+  sheetCache = { at: Date.now(), index };
+  index.catch(() => {
+    sheetCache = null; // retry on the next request instead of caching the failure
+  });
+  return index;
+}
 
 export async function fetchAvailability(courtId: string, date: string, signal?: AbortSignal): Promise<AvailabilityResult> {
+  if (services.bookedSheetUrl) {
+    try {
+      const index = await loadBookedSheet(services.bookedSheetUrl);
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      return { status: "ok", booked: index.get(`${courtId}|${date}`) ?? [] };
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      console.error("[availability]", err);
+      return { status: "error" };
+    }
+  }
   if (!services.availabilityEndpoint) return { status: "disabled" };
   // Abort on the caller's signal (date changed) or after a timeout (service hung).
   const controller = new AbortController();

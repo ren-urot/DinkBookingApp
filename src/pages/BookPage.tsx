@@ -67,10 +67,12 @@ function useFacilityClock() {
 
 type Availability = { status: "disabled" | "loading" | "ok" | "error"; booked: BookedRange[] };
 
+const AVAILABILITY_REFRESH_MS = 60_000;
+
 function useAvailability(courtId: string | null, date: string | null): Availability {
   const [state, setState] = useState<Availability>({ status: "disabled", booked: [] });
   useEffect(() => {
-    if (!courtId || !date || !services.availabilityEndpoint) return;
+    if (!courtId || !date || (!services.availabilityEndpoint && !services.bookedSheetUrl)) return;
     const controller = new AbortController();
     // Never reuse another date's reservations while the new ones load.
     setState({ status: "loading", booked: [] });
@@ -79,7 +81,21 @@ function useAvailability(courtId: string | null, date: string | null): Availabil
       .catch(() => {
         /* aborted */
       });
-    return () => controller.abort();
+    // Quietly pick up slots staff confirm while the customer is still choosing.
+    // A failed refresh keeps the last good schedule rather than clearing it.
+    const refresh = setInterval(() => {
+      fetchAvailability(courtId, date, controller.signal)
+        .then((r) => {
+          if (r.status === "ok") setState({ status: "ok", booked: r.booked });
+        })
+        .catch(() => {
+          /* aborted */
+        });
+    }, AVAILABILITY_REFRESH_MS);
+    return () => {
+      controller.abort();
+      clearInterval(refresh);
+    };
   }, [courtId, date]);
   return state;
 }

@@ -23,17 +23,19 @@ Match the two using the **booking reference**. If two requests share a reference
 
 ## Daily workflow
 
-1. **New request:** check the court and time in your schedule.
+The **booked-slots Google Sheet** is your schedule. Every time you add a row, the website greys out that court and time within about a minute, so nobody else can request it. Rows with Status `Confirmed` or `Held` block the time; change Status to `Cancelled` (or delete the row) to free it. **Only court, date, times, status and reference go in the sheet - never names or phone numbers.** It's readable by anyone with the link.
+
+1. **New request:** check the court and time in the sheet.
    - Conflict? Contact the customer and offer another slot. If they already paid, refund in full. Status: **Unavailable**.
-   - Free? Pencil it in as held and reply that you received it. Status: **Awaiting Payment**. Unpaid requests may be released after 2 hours (the website tells customers this).
+   - Free? **Add a row with Status `Held`** and reply that you received it. Status: **Awaiting Payment**. Unpaid requests may be released after 2 hours (the website tells customers this); change that row to `Cancelled` if they don't pay.
 2. **Receipt arrives:** status is **Payment Submitted**. Then **Under Verification** while you check:
    - Open the **GCash app / business dashboard or bank statement** and find the transaction by reference number.
    - Confirm the **amount** matches the booking total (the email says if the customer typed a different amount), the **date**, and that the money reached **our** account.
    - **A screenshot alone is not proof of payment.** Receipts can be edited. Only the actual transaction in our records counts.
-3. **Confirm the court is still free**, then mark the booking **Confirmed** in your schedule.
+3. **Confirm the court is still free**, then change the row's Status to **`Confirmed`** in the sheet.
 4. **Notify the customer** by SMS (and email if given), for example:
    > Hi Maria, your booking DD-261020-7KQ3P is CONFIRMED: Court 2, Thu Oct 22, 6:00-8:00 PM. Please arrive 10 minutes early. - Dink District
-5. **Cancellations and refunds** follow the published policy (Policies page). Refund manually to the same GCash number or bank account, then mark the booking **Cancelled**.
+5. **Cancellations and refunds** follow the published policy (Policies page). Refund manually to the same GCash number or bank account, then set the row's Status to **`Cancelled`** so the time opens up again.
 
 ## Status meanings (same wording customers see)
 

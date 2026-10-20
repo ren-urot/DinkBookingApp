@@ -34,6 +34,22 @@ function readUrl(value: string | undefined): string | null {
   return null;
 }
 
+/**
+ * Turns a Google Sheet link into its CSV download URL (first tab), which Google
+ * serves with CORS so the browser can read it. Accepts the normal share link
+ * (".../spreadsheets/d/<id>/edit?usp=sharing") or a ready-made CSV link.
+ */
+export function toSheetCsvUrl(value: string | undefined): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  const id = v.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/)?.[1];
+  if (id && !/\/d\/e\//.test(v) && !/gviz|export|output=csv/.test(v)) {
+    const gid = v.match(/[#&?]gid=(\d+)/)?.[1];
+    return `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ""}`;
+  }
+  return readUrl(v);
+}
+
 const provider = readProvider();
 
 export const services = {
@@ -43,6 +59,8 @@ export const services = {
   receiptEndpoint: provider === "netlify" ? "/__forms.html" : readUrl(env.VITE_RECEIPT_ENDPOINT),
   lookupEndpoint: readUrl(env.VITE_LOOKUP_ENDPOINT),
   availabilityEndpoint: readUrl(env.VITE_AVAILABILITY_ENDPOINT),
+  /** Google Sheet of confirmed/held bookings; those times are greyed out. See README. */
+  bookedSheetUrl: toSheetCsvUrl(env.VITE_BOOKED_SHEET_URL),
   /** Netlify form names; must match the hidden forms in public/__forms.html. */
   netlifyForms: { booking: "booking-request", receipt: "payment-receipt" },
   requestTimeoutMs: 20_000,
