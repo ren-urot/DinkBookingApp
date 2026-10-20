@@ -26,7 +26,9 @@ export default defineConfig({
     react(),
     samplePaymentWarning(),
     VitePWA({
-      // "prompt": never reload by itself mid-booking; the app offers a Reload button instead.
+      // A new version takes over as soon as it's downloaded (skipWaiting below), but the
+      // page is never reloaded mid-booking: the open page keeps working and the next page
+      // load or visit gets the new version. ("autoUpdate" would force a reload.)
       registerType: "prompt",
       includeAssets: ["favicon.svg", "apple-touch-icon-180x180.png", "favicon.ico", "courts/*.jpg", "gcash-qr.svg"],
       manifest: {
@@ -50,6 +52,10 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
+        // Don't wait for every tab to close before using a new version.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
     }),
   ],

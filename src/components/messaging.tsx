@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Mail, MessageCircle, MessageSquare, Paperclip, Phone, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,26 @@ export function SendViaPhone({ message, file, onSent, sentLabel, title = "Send i
   className?: string;
 }) {
   const [opened, setOpened] = useState(false);
+  const [returned, setReturned] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
   const links = messageLinks(message);
+
+  // When the customer comes back from their SMS/Viber/Messenger/email app, bring the
+  // final "I've sent it" step into view - it's easy to forget after switching apps.
+  useEffect(() => {
+    if (!opened) return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      setReturned(true);
+      setTimeout(() => confirmRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [opened]);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const canShareFile = Boolean(file && canShare && navigator.canShare?.({ files: [file] }));
 
@@ -100,8 +119,21 @@ export function SendViaPhone({ message, file, onSent, sentLabel, title = "Send i
           </div>
         </details>
 
-        <div className={cn("space-y-2 rounded-lg p-3", opened ? "bg-secondary" : "bg-muted/60")}>
-          <p className="text-sm font-semibold">{opened ? "Did you press Send in your app?" : "Already sent it another way?"}</p>
+        <div
+          ref={confirmRef}
+          className={cn(
+            "scroll-mt-24 space-y-2 rounded-lg p-3 transition-shadow",
+            opened ? "bg-secondary" : "bg-muted/60",
+            returned && "ring-2 ring-primary ring-offset-2",
+          )}
+        >
+          <p className="text-sm font-semibold" aria-live="polite">
+            {returned
+              ? "Welcome back! Did you press Send? Tap below to finish."
+              : opened
+                ? "Did you press Send in your app?"
+                : "Already sent it another way?"}
+          </p>
           <Button type="button" size="lg" variant={opened ? "default" : "outline"} className="w-full" onClick={onSent}>
             <CheckCircle2 /> {sentLabel}
           </Button>
